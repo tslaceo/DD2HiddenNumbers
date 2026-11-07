@@ -4,7 +4,7 @@ Every ring and augment the hidden-stats panel of Hidden Numbers knows (90 rings,
 
 Each line carries the mark the panel gives it. A line without a mark is settled by a developers' note, a field name or a check in the game, or both [Clear Effect Descriptions](https://www.nexusmods.com/dragonsdogma2/mods/314) and [Better Better Item Description](https://www.nexusmods.com/dragonsdogma2/mods/338) read the number the same way. ≈ marks a line those two mods do not confirm: what the number does is clear, but one of them says nothing about it or reads its unit or formula differently. ? marks a guess: the game has the number, but what it does is not clear.
 
-Checked in the game: the Ring of Quickening, the Ring of Reversal's drain and the Ring of Enervation's return. Fortuity's chances of extra gold and meat and the steps of the Ring of Brawn and the Ring of Proximity were read in the running game. The lines still open come first, with what would settle each.
+Checked in the game: the Ring of Quickening, the Ring of Reversal's drain and the Ring of Enervation's return. Fortuity's chances of extra gold and meat and the steps of the Ring of Brawn and the Ring of Proximity were read in the running game. The lines still open come first, with what would settle each. How to check a line and send what you saw: [Help check the hidden stats](https://github.com/tslaceo/DD2HiddenNumbers#help-check-the-hidden-stats) in the README.
 
 ## Open
 

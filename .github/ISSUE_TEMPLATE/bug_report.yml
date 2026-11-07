@@ -1,0 +1,38 @@
+name: Bug report
+description: Something in the mod went wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you fill this in: turn on Debug in the settings window (F8, under Other) and repeat what went wrong.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw and what you expected.
+    validations:
+      required: true
+  - type: input
+    id: mod_version
+    attributes:
+      label: Mod version
+      description: The number in the archive's name, or in REFramework's log line "Hidden Numbers ... loaded".
+      placeholder: "1.0.0"
+  - type: input
+    id: game_version
+    attributes:
+      label: Game version
+      placeholder: "4.2.0.0"
+  - type: input
+    id: reframework
+    attributes:
+      label: REFramework build
+      placeholder: "01422"
+  - type: textarea
+    id: files
+    attributes:
+      label: Files
+      description: |
+        Drag reframework\data\DD2DamageMeter\debug.log and re2_framework_log.txt from the game folder here.
+        A screenshot helps too.

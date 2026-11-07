@@ -1,0 +1,42 @@
+name: Hidden stats check
+description: You checked what a ring or an augment does in the game.
+title: "Check: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for checking. [RINGS.md](https://github.com/tslaceo/DD2HiddenNumbers/blob/main/RINGS.md) lists the open lines and what would settle each, and [Help check the hidden stats](https://github.com/tslaceo/DD2HiddenNumbers#help-check-the-hidden-stats) says how to check them.
+  - type: input
+    id: item
+    attributes:
+      label: Ring or augment
+      placeholder: Ring of Inversion
+    validations:
+      required: true
+  - type: textarea
+    id: did
+    attributes:
+      label: What you did
+      description: |
+        For example: took the ring off, waited a couple of seconds, put it back on; fought the same enemy with and
+        without it; timed your stamina from empty to full with and without it.
+    validations:
+      required: true
+  - type: textarea
+    id: saw
+    attributes:
+      label: What you saw
+      description: The numbers you saw or timed, and what the panel says for it.
+  - type: textarea
+    id: files
+    attributes:
+      label: collect.jsonl
+      description: |
+        Drag reframework\data\DD2DamageMeter\collect.jsonl here (Debug must be on while you check). It holds your
+        character's numbers and equipment, the names of your party and what the mod saw in fights; nothing from
+        outside the game.
+  - type: input
+    id: versions
+    attributes:
+      label: Mod and game version
+      placeholder: "1.0.0, 4.2.0.0"

@@ -223,13 +223,14 @@ without it ("defense 1486 → 1645 (+11%)"), and by a ≈ line with the damage t
 damage taken"), an estimate that leaves out the enemy's side of the game's formula. A ring whose numbers depend on the
 vocation is read for the vocation of the character the screen shows.
 
-Every ring and augment, what the panel says and how sure it is: [RINGS.md](https://github.com/tslaceo/DD2HiddenNumbers/blob/main/RINGS.md).
-
 ## Help check the hidden stats
 
 A line marked ≈ or ? is not settled yet. With ≈ the number is the game's and what it does is clear, but Clear Effect
 Descriptions or Better Better Item Description says nothing about it or reads it otherwise, and nobody has checked it
 in the game yet. With ? we only guess what the number does.
+
+[RINGS.md](https://github.com/tslaceo/DD2HiddenNumbers/blob/main/RINGS.md) lists every ring and augment with the
+panel's lines and their marks. The open lines come first, each with what would settle it.
 
 Checked in the game so far: the Ring of Quickening (its panel says +10%, and timed with and without it, stamina
 refilled about 12 % faster: a percentage on the refill speed, not 10 a second), the Ring of Reversal's drain (120
