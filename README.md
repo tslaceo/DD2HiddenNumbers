@@ -210,7 +210,7 @@ Each line says how sure that reading is. The readings were cross-checked against
 numbers: [Clear Effect Descriptions 2.0](https://www.nexusmods.com/dragonsdogma2/mods/314) by Filipe Ramos and
 [Better Better Item Description](https://www.nexusmods.com/dragonsdogma2/mods/338) by xyzkljl1. A line without a mark
 is settled by a developers' note, a field name or a check in the game, or both of those mods read the number the same
-way we do. ≈ marks a line they do not confirm: what the number does is clear, but one of them says nothing about it or
+way I do. ≈ marks a line they do not confirm: what the number does is clear, but one of them says nothing about it or
 reads its unit or formula differently. ? marks a guess: the game has the number, but what it does is not clear. A
 panel with a ≈ or ? line ends with a grey line that repeats this. "no number found in the game" means the effect
 should have a number and none was found.
@@ -227,7 +227,7 @@ vocation is read for the vocation of the character the screen shows.
 
 A line marked ≈ or ? is not settled yet. With ≈ the number is the game's and what it does is clear, but Clear Effect
 Descriptions or Better Better Item Description says nothing about it or reads it otherwise, and nobody has checked it
-in the game yet. With ? we only guess what the number does.
+in the game yet. With ? I only guess what the number does.
 
 [RINGS.md](https://github.com/tslaceo/DD2HiddenNumbers/blob/main/RINGS.md) lists every ring and augment with the
 panel's lines and their marks. The open lines come first, each with what would settle it.
@@ -255,7 +255,7 @@ your gear's resistances. When your augments or equipment change and your numbers
 changes in one visit to a menu end up in one line. A level up or a meal changes your numbers but not your equipment,
 so it writes nothing.
 
-Other lines change nothing the status screen shows and need a fight or a stopwatch. If you try one of these, tell us
+Other lines change nothing the status screen shows and need a fight or a stopwatch. If you try one of these, tell me
 what you saw:
 
 - The Ring of Gallantry: the damage you take from ranged attacks from the front and from hits in the back. Take the
@@ -528,7 +528,7 @@ log, `re2_framework_log.txt` in the game folder, such as its name and version wh
 - The hidden stats were checked against
   [Clear Effect Descriptions 2.0](https://www.nexusmods.com/dragonsdogma2/mods/314) by Filipe Ramos and
   [Better Better Item Description](https://www.nexusmods.com/dragonsdogma2/mods/338) by xyzkljl1. Where both read a
-  number the same way and we read it differently, the panel takes their reading. No code or text of theirs is used.
+  number the same way and I read it differently, the panel takes their reading. No code or text of theirs is used.
 
 ## AI disclosure
 
