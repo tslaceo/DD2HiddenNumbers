@@ -1,0 +1,101 @@
+package.path = "mod/reframework/autorun/?.lua;tests/?.lua;" .. package.path
+
+local T = require("testlib")
+local test, eq = T.test, T.eq
+local History = require("DD2DamageMeter/history")
+
+local function push_all(h, from, to)
+    for i = from, to do h:push({ id = i }) end
+end
+
+test("empty history", function()
+    local h = History.new(10)
+    eq(h:count(), 0, "count")
+    eq(h:get(1), nil, "get(1)")
+end)
+
+test("newest first", function()
+    local h = History.new(10)
+    push_all(h, 1, 3)
+    eq(h:count(), 3, "count")
+    eq(h:get(1).id, 3, "get(1)")
+    eq(h:get(2).id, 2, "get(2)")
+    eq(h:get(3).id, 1, "get(3)")
+end)
+
+test("get outside the range is nil", function()
+    local h = History.new(10)
+    push_all(h, 1, 2)
+    eq(h:get(0), nil, "get(0)")
+    eq(h:get(3), nil, "get(3)")
+    eq(h:get(-1), nil, "get(-1)")
+end)
+
+test("the stored item is the one pushed", function()
+    local h = History.new(10)
+    local item = { id = 1 }
+    h:push(item)
+    eq(h:get(1), item, "same table")
+end)
+
+test("max 10 drops the oldest", function()
+    local h = History.new(10)
+    push_all(h, 1, 12)
+    eq(h:count(), 10, "count")
+    eq(h:get(1).id, 12, "newest")
+    eq(h:get(10).id, 3, "oldest kept")
+    eq(h:get(11), nil, "past the max")
+end)
+
+test("resize to 3 keeps the 3 newest", function()
+    local h = History.new(10)
+    push_all(h, 1, 8)
+    h:resize(3)
+    eq(h:count(), 3, "count")
+    eq(h:get(1).id, 8, "get(1)")
+    eq(h:get(2).id, 7, "get(2)")
+    eq(h:get(3).id, 6, "get(3)")
+    eq(h:get(4), nil, "get(4)")
+    h:push({ id = 9 })
+    eq(h:count(), 3, "count after a push at the new max")
+    eq(h:get(3).id, 7, "oldest after a push")
+end)
+
+test("resize up keeps everything and allows more", function()
+    local h = History.new(2)
+    push_all(h, 1, 3)
+    h:resize(4)
+    eq(h:count(), 2, "dropped fights do not come back")
+    push_all(h, 4, 6)
+    eq(h:count(), 4, "count")
+    eq(h:get(1).id, 6, "newest")
+    eq(h:get(4).id, 3, "oldest")
+end)
+
+test("replace_newest puts an item in place of the newest; the others and the count stay", function()
+    local h = History.new(3)
+    push_all(h, 1, 3)
+    local item = { id = "3b" }
+    h:replace_newest(item)
+    eq(h:count(), 3, "count unchanged")
+    eq(h:get(1), item, "the new item is the newest")
+    eq(h:get(2).id, 2, "get(2)")
+    eq(h:get(3).id, 1, "get(3)")
+    h:push({ id = 4 })
+    eq(h:get(2), item, "a later push moves it down as any item")
+    eq(h:count(), 3, "and the max holds")
+
+    local empty = History.new(3)
+    empty:replace_newest(item)
+    eq(empty:count(), 1, "with none, the item is pushed")
+    eq(empty:get(1), item, "as the newest")
+end)
+
+test("max 0 keeps nothing", function()
+    local h = History.new(0)
+    h:push({ id = 1 })
+    eq(h:count(), 0, "count")
+    eq(h:get(1), nil, "get(1)")
+end)
+
+T.finish()
