@@ -223,6 +223,8 @@ without it ("defense 1486 → 1645 (+11%)"), and by a ≈ line with the damage t
 damage taken"), an estimate that leaves out the enemy's side of the game's formula. A ring whose numbers depend on the
 vocation is read for the vocation of the character the screen shows.
 
+Every ring and augment, what the panel says and how sure it is: [RINGS.md](https://github.com/tslaceo/DD2HiddenNumbers/blob/main/RINGS.md).
+
 ## Help check the hidden stats
 
 A line marked ≈ or ? is not settled yet. With ≈ the number is the game's and what it does is clear, but Clear Effect
