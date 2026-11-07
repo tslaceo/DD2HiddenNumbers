@@ -243,8 +243,9 @@ Lines that change your own numbers take a minute to settle:
 1. Turn on Debug in the settings window (F8, under Other).
 2. Change one augment at a vocation guild, or one ring on the equipment screen.
 3. Go back to the game for a couple of seconds.
-4. Send `reframework\data\DD2DamageMeter\collect.jsonl` (its `stat_check` lines are enough) through the Bugs tab of
-   the mod's Nexus page or the [Issues of its GitHub repository](https://github.com/tslaceo/DD2HiddenNumbers/issues).
+4. Zip `reframework\data\DD2DamageMeter\collect.jsonl` (GitHub does not take a .jsonl file as it is) and attach the
+   zip to a [Hidden stats check](https://github.com/tslaceo/DD2HiddenNumbers/issues/new?template=hidden_stats_check.yml)
+   on GitHub, or post a link to it in the Bugs tab of the mod's Nexus page. Its `stat_check` lines are enough.
 
 You do not need to open the status screen. While Debug is on and the game is not paused, the mod notes your numbers
 every two seconds: strength, defense, magick, magick defense, knockdown power and knockdown resistance with every part

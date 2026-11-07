@@ -32,9 +32,9 @@ body:
     attributes:
       label: collect.jsonl
       description: |
-        Drag reframework\data\DD2DamageMeter\collect.jsonl here (Debug must be on while you check). It holds your
-        character's numbers and equipment, the names of your party and what the mod saw in fights; nothing from
-        outside the game.
+        Zip reframework\data\DD2DamageMeter\collect.jsonl and drag the zip here (GitHub does not take a .jsonl file as
+        it is; Debug must be on while you check). It holds your character's numbers and equipment, the names of your
+        party and what the mod saw in fights; nothing from outside the game.
   - type: input
     id: versions
     attributes:
