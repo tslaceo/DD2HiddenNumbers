@@ -6861,8 +6861,7 @@ test("the totals and what is on reach the panel, read only for an entry with a t
         builds = builds + 1
         return panel(...)
     end
-    local legend = "≈ другие моды не подтверждают · ? догадка"
-    -- Стойкость on the player: his totals and his augments, by the chara id shown
+    -- Стойкость on the player: his totals and his augments, by the chara id shown; every line plain, so no legend
     W.augments.Job01_01 = AUG_0101
     W.bases[PLAYER_ID] = base_of("player", 380)
     W.totals[PLAYER_ID] = { phys = 1645, magic = 1494.94 }
@@ -6870,7 +6869,7 @@ test("the totals and what is on reach the panel, read only for an entry with a t
     W.hover = augment_hover("Job01_01", "player", PLAYER_ID)
     for _ = 1, 3 do frame() end
     eq(hidden_text(), "+45 и +30% от базовой защиты (у тебя 380) — сейчас +159 / защита 1486 → 1645 (+11%)"
-        .. " / ≈ -10% физ. урона по тебе / " .. legend, "on him: the 159 is in his 1645")
+        .. " / до -10% физ. урона по тебе", "on him: the 159 is in his 1645")
     eq(W.hs.totals[1], PLAYER_ID, "his totals")
     eq(W.hs.equipped[1], PLAYER_ID, "what he has on")
     eq(builds, 1, "the same totals read anew: built once")
@@ -6893,8 +6892,7 @@ test("the totals and what is on reach the panel, read only for an entry with a t
     W.equipped[CASCA_ID] = { augments = {}, items = { [2001] = true, [3509] = true } }
     W.hover = ring_hover(3509, "equipment", "pawn", CASCA_ID)
     frame()
-    eq(hidden_text(), "+50 к физ. защите / защита 1275 → 1325 (+4%) / ≈ -4% физ. урона по пешке / " .. legend,
-        "on her")
+    eq(hidden_text(), "+50 к физ. защите / защита 1275 → 1325 (+4%) / до -4% физ. урона по пешке", "on her")
     eq(W.hs.totals[#W.hs.totals], CASCA_ID, "her totals")
     eq(W.hs.equipped[#W.hs.equipped], CASCA_ID, "her gear")
     W.totals[CASCA_ID] = { phys = 1425, magic = 1240 }
@@ -6927,7 +6925,6 @@ do
 end
 
 local STOUT_LINE = "+45 и +30% от базовой защиты (у тебя 380) — сейчас +159"
-local HS_LEGEND = "≈ другие моды не подтверждают · ? догадка"
 
 -- A world where what the player has on is read by the real HiddenScreens.equipped, the rest of the
 -- hidden-stats screens faked as hidden_screens() fakes them: his Human (a Thief, 4) with an AbilityContext whose
@@ -6993,7 +6990,7 @@ test("an augment slot that reads nothing leaves out the total and damage lines, 
     local M = equipped_world()
     W.hover = augment_hover("Job01_01", "player", PLAYER_ID)
     frame()
-    eq(hidden_text(), STOUT_LINE .. " / защита 1486 → 1645 (+11%) / ≈ -10% физ. урона по тебе / " .. HS_LEGEND,
+    eq(hidden_text(), STOUT_LINE .. " / защита 1486 → 1645 (+11%) / до -10% физ. урона по тебе",
         "every slot read: Стойкость on him")
     W.slots[4] = nil
     frame()
@@ -7004,7 +7001,7 @@ test("an augment slot that reads nothing leaves out the total and damage lines, 
     eq(hidden_text(), STOUT_LINE, "a slot unread is never «not on»")
     W.slots[4] = 0
     frame()
-    eq(hidden_text(), STOUT_LINE .. " / защита 1645 → 1804 (+10%) / ≈ -9% физ. урона по тебе / " .. HS_LEGEND,
+    eq(hidden_text(), STOUT_LINE .. " / защита 1645 → 1804 (+10%) / до -9% физ. урона по тебе",
         "every slot read and Стойкость in none: not on him")
     eq(M.info().errors, 0, "no error caught")
 end)
@@ -7020,7 +7017,7 @@ test("an augment id with no name in app.HumanAbilityID leaves out the total and 
     eq(hidden_text(), STOUT_LINE, "999 might be Стойкость: never «not on»")
     W.slots[2], W.slots[5] = ABILITY_IDS.Job01_01, 0
     frame()
-    eq(hidden_text(), STOUT_LINE .. " / защита 1486 → 1645 (+11%) / ≈ -10% физ. урона по тебе / " .. HS_LEGEND,
+    eq(hidden_text(), STOUT_LINE .. " / защита 1486 → 1645 (+11%) / до -10% физ. урона по тебе",
         "every id named: the lines")
     eq(M.info().errors, 0, "no error caught")
 end)
@@ -7030,7 +7027,7 @@ test("an Equips entry that cannot be read leaves out the ring's total and damage
     W.totals[PLAYER_ID] = { phys = 1536, magic = 1494.94 }
     W.hover = ring_hover(3509)
     frame()
-    eq(hidden_text(), "+50 к физ. защите / защита 1486 → 1536 (+3%) / ≈ -3% физ. урона по тебе / " .. HS_LEGEND,
+    eq(hidden_text(), "+50 к физ. защите / защита 1486 → 1536 (+3%) / до -3% физ. урона по тебе",
         "every entry read (a null one is an empty slot): Кольцо стойкости on him")
     W.equips[3] = "unread"
     frame()
@@ -7040,7 +7037,7 @@ test("an Equips entry that cannot be read leaves out the ring's total and damage
     eq(hidden_text(), "+50 к физ. защите", "the ring not among those read: never «not on»")
     W.equips = { 1001, 0, false }
     frame()
-    eq(hidden_text(), "+50 к физ. защите / защита 1536 → 1586 (+3%) / ≈ -3% физ. урона по тебе / " .. HS_LEGEND,
+    eq(hidden_text(), "+50 к физ. защите / защита 1536 → 1586 (+3%) / до -3% физ. урона по тебе",
         "every entry read, the ring in none: not on him")
     eq(M.info().errors, 0, "no error caught")
 end)

@@ -284,8 +284,8 @@ return {
     -- number in the game, the legend of the marks (≈ not confirmed by other mods, ? a guess); after a % of a
     -- base stat the base in brackets and the personal number (%s: "380", "+159") for the player or the
     -- pawn, and the hint when the base is not known; the word for whose base it is ({whose} of the data's English
-    -- texts: "of your base defense"); under a defence line the total before → after and its percent, then the
-    -- damage taken (%s: "-10%")
+    -- texts: "of your base defense"); under a defence line the total before → after and its percent, then the most
+    -- damage taken it can cut (%s: "-10%")
     hs_none = "no number found in the game",
     hs_legend = "≈ not confirmed by other mods · ? a guess",
     hs_yours = "(%s) — %s now",
@@ -296,10 +296,10 @@ return {
     hs_whose_none = "the",
     hs_total_phys = "defense %s → %s (%s)",
     hs_total_magic = "magick defense %s → %s (%s)",
-    hs_damage_phys_yours = "%s physical damage taken",
-    hs_damage_phys_pawns = "%s physical damage the pawn takes",
-    hs_damage_magic_yours = "%s magick damage taken",
-    hs_damage_magic_pawns = "%s magick damage the pawn takes",
+    hs_damage_phys_yours = "up to %s physical damage taken",
+    hs_damage_phys_pawns = "up to %s physical damage the pawn takes",
+    hs_damage_magic_yours = "up to %s magick damage taken",
+    hs_damage_magic_pawns = "up to %s magick damage the pawn takes",
 
     -- the journal: vocations (the game's JobEnum order)
     job_1 = "Fighter",

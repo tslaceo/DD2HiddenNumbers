@@ -62,7 +62,7 @@ local KEYS = {
     "setting_help_enemy_plate_size",
     -- the hidden-stats panel's own texts
     "hs_none", "hs_legend", "hs_yours", "hs_pawns", "hs_base_hint",
-    -- whose base in English, the total line, the damage taken
+    -- whose base in English, the total line, the most damage taken it can cut
     "hs_whose_yours", "hs_whose_pawns", "hs_whose_none", "hs_total_phys", "hs_total_magic", "hs_damage_phys_yours",
     "hs_damage_phys_pawns", "hs_damage_magic_yours", "hs_damage_magic_pawns",
     -- the hidden-stats panel's settings group
@@ -81,13 +81,13 @@ local HS_TEXTS = {
     hs_whose_yours = { "", "your" },
     hs_whose_pawns = { "", "the pawn's" },
     hs_whose_none = { "", "the" },
-    -- the total before → after; the damage taken
+    -- the total before → after; the most damage taken it can cut
     hs_total_phys = { "защита %s → %s (%s)", "defense %s → %s (%s)" },
     hs_total_magic = { "маг. защита %s → %s (%s)", "magick defense %s → %s (%s)" },
-    hs_damage_phys_yours = { "%s физ. урона по тебе", "%s physical damage taken" },
-    hs_damage_phys_pawns = { "%s физ. урона по пешке", "%s physical damage the pawn takes" },
-    hs_damage_magic_yours = { "%s маг. урона по тебе", "%s magick damage taken" },
-    hs_damage_magic_pawns = { "%s маг. урона по пешке", "%s magick damage the pawn takes" },
+    hs_damage_phys_yours = { "до %s физ. урона по тебе", "up to %s physical damage taken" },
+    hs_damage_phys_pawns = { "до %s физ. урона по пешке", "up to %s physical damage the pawn takes" },
+    hs_damage_magic_yours = { "до %s маг. урона по тебе", "up to %s magick damage taken" },
+    hs_damage_magic_pawns = { "до %s маг. урона по пешке", "up to %s magick damage the pawn takes" },
 }
 
 -- The settings window's texts (its new look: short names, a table, units, help lines), key -> { ru, en }.

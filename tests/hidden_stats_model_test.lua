@@ -407,7 +407,7 @@ test("the total line: under a defence line, the total before → after and the p
     -- equipped: the status screen's 1645 has the 159 in it; then the damage taken
     local p = Model.panel(mettle, raw, base, on(1645, 1494.94))
     eq(texts(p), "plain:+45 и +30% от базовой защиты (у тебя 380) — сейчас +159 | plain:защита 1486 → 1645 (+11%)"
-        .. " | approx:≈ -10% физ. урона по тебе", "Стойкость equipped")
+        .. " | plain:до -10% физ. урона по тебе", "Стойкость equipped")
     -- not equipped: the 159 comes on top of the total
     eq(Model.panel(mettle, raw, base, off(1486, 1337.8)).lines[2].text, "защита 1486 → 1645 (+11%)",
         "Стойкость not equipped")
@@ -422,12 +422,12 @@ test("the total line: under a defence line, the total before → after and the p
         "защита 1443 → 1600 (+11%)", "a pawn equipped")
     -- the rings: the ArmorParam's field is what they add
     local steel = Model.panel(Data.ring(3509), ring_raw({ fields = { PhysicalDefence = 50 } }), nil, off(1486, 1337))
-    eq(texts(steel), "plain:+50 к физ. защите | plain:защита 1486 → 1536 (+3%) | approx:≈ -3% физ. урона по тебе",
+    eq(texts(steel), "plain:+50 к физ. защите | plain:защита 1486 → 1536 (+3%) | plain:до -3% физ. урона по тебе",
         "Кольцо стойкости not equipped")
     eq(Model.panel(Data.ring(3509), ring_raw({ fields = { PhysicalDefence = 50 } }), nil, on(1536, 1337)).lines[2]
         .text, "защита 1486 → 1536 (+3%)", "Кольцо стойкости equipped")
     eq(texts(Model.panel(Data.ring(3511), ring_raw({ fields = { MagicDefence = 50 } }), nil, on(1645, 1494.94))),
-        "plain:+50 к маг. защите | plain:маг. защита 1444 → 1494 (+3%) | approx:≈ -3% маг. урона по тебе",
+        "plain:+50 к маг. защите | plain:маг. защита 1444 → 1494 (+3%) | plain:до -3% маг. урона по тебе",
         "Кольцо сохранения equipped")
     I18n.set("en")
     eq(Model.panel(mettle, raw, base, on(1645, 1494.94)).lines[2].text, "defense 1486 → 1645 (+11%)", "en")
@@ -436,32 +436,32 @@ test("the total line: under a defence line, the total before → after and the p
     I18n.set("ru")
 end)
 
-test("the damage taken: ≈, under each total line, 1 − before / after, for you or the pawn", function()
+test("the damage taken: «до», under each total line, 1 − before / after, for you or the pawn", function()
     I18n.set("ru")
     local mettle, raw = Data.augment("Job01_01"), { v1 = 45, v2 = 30 }
     local player, pawn = { who = "player", phys_defence = 380 }, { who = "pawn", phys_defence = 380 }
     -- Стойкость equipped, 1486 → 1645: 1 − 1486 / 1645 = 9,67 %, whole and with its sign
     local p = Model.panel(mettle, raw, player, on(1645, 1494.94))
     eq(#p.lines, 3, "the line, its total, the damage")
-    eq(p.lines[3].text, "≈ -10% физ. урона по тебе", "the player")
-    eq(p.lines[3].mark, "approx", "approx")
-    eq(p.legend, true, "the only ≈ line brings the legend")
-    eq(Model.panel(mettle, raw, pawn, on(1645, 1494.94, "pawn")).lines[3].text, "≈ -10% физ. урона по пешке",
+    eq(p.lines[3].text, "до -10% физ. урона по тебе", "the player")
+    eq(p.lines[3].mark, "plain", "Стойкость's mark: plain")
+    eq(p.legend, false, "nothing marked: no legend")
+    eq(Model.panel(mettle, raw, pawn, on(1645, 1494.94, "pawn")).lines[3].text, "до -10% физ. урона по пешке",
         "the pawn")
     -- not equipped: the same before and after
-    eq(Model.panel(mettle, raw, player, off(1486, 0)).lines[3].text, "≈ -10% физ. урона по тебе", "not equipped")
+    eq(Model.panel(mettle, raw, player, off(1486, 0)).lines[3].text, "до -10% физ. урона по тебе", "not equipped")
     -- the magick form: Изгнание, 1337,8 → 1494,94 = 10,5 %
     local apo, mbase = Data.augment("Job03_00"), { who = "player", magic_defence = 373.8 }
-    eq(Model.panel(apo, raw, mbase, on(1645, 1494.94)).lines[3].text, "≈ -11% маг. урона по тебе", "magick")
+    eq(Model.panel(apo, raw, mbase, on(1645, 1494.94)).lines[3].text, "до -11% маг. урона по тебе", "magick")
     eq(Model.panel(apo, raw, { who = "pawn", magic_defence = 373.8 }, on(1645, 1494.94, "pawn")).lines[3].text,
-        "≈ -11% маг. урона по пешке", "magick, the pawn")
+        "до -11% маг. урона по пешке", "magick, the pawn")
     I18n.set("en")
-    eq(Model.panel(mettle, raw, player, on(1645, 1494.94)).lines[3].text, "≈ -10% physical damage taken", "en")
+    eq(Model.panel(mettle, raw, player, on(1645, 1494.94)).lines[3].text, "up to -10% physical damage taken", "en")
     eq(Model.panel(mettle, raw, pawn, on(1645, 1494.94, "pawn")).lines[3].text,
-        "≈ -10% physical damage the pawn takes", "en pawn")
-    eq(Model.panel(apo, raw, mbase, on(1645, 1494.94)).lines[3].text, "≈ -11% magick damage taken", "en magick")
+        "up to -10% physical damage the pawn takes", "en pawn")
+    eq(Model.panel(apo, raw, mbase, on(1645, 1494.94)).lines[3].text, "up to -11% magick damage taken", "en magick")
     eq(Model.panel(apo, raw, { who = "pawn", magic_defence = 373.8 }, on(1645, 1494.94, "pawn")).lines[3].text,
-        "≈ -11% magick damage the pawn takes", "en magick, the pawn")
+        "up to -11% magick damage the pawn takes", "en magick, the pawn")
     I18n.set("ru")
     -- no total line, no damage line
     eq(#Model.panel(mettle, raw, player, nil).lines, 1, "no totals")
@@ -479,11 +479,11 @@ test("Кольцо спокойствия (8600) has two total lines, each under
     I18n.set("ru")
     local calm = ring_raw({ fields = { PhysicalDefence = 10, MagicDefence = 10 } })
     eq(texts(Model.panel(Data.ring(8600), calm, nil, on(1645, 1494.94))),
-        "plain:+10 к физ. защите | plain:защита 1635 → 1645 (+1%) | approx:≈ -1% физ. урона по тебе"
-        .. " | plain:+10 к маг. защите | plain:маг. защита 1484 → 1494 (+1%) | approx:≈ -1% маг. урона по тебе",
+        "plain:+10 к физ. защите | plain:защита 1635 → 1645 (+1%) | plain:до -1% физ. урона по тебе"
+        .. " | plain:+10 к маг. защите | plain:маг. защита 1484 → 1494 (+1%) | plain:до -1% маг. урона по тебе",
         "equipped")
     eq(texts(Model.panel(Data.ring(8600), calm, nil, off(1645, nil))),
-        "plain:+10 к физ. защите | plain:защита 1645 → 1655 (+1%) | approx:≈ -1% физ. урона по тебе"
+        "plain:+10 к физ. защите | plain:защита 1645 → 1655 (+1%) | plain:до -1% физ. урона по тебе"
         .. " | plain:+10 к маг. защите", "the magick total unread: its line only")
     I18n.set("ru")
 end)
@@ -521,18 +521,90 @@ test("no total line when anything it needs cannot be read; none for other lines"
     I18n.set("ru")
 end)
 
-test("the total line keeps the mark of the line it follows; the damage line is always ≈", function()
+test("the total line and the damage line keep the mark of the line they follow", function()
     I18n.set("ru")
     local e = { lines = { { mark = "approx", ru = "{1} к физ. защите", en = "{1} defense",
                             nums = { { src = "fields.PhysicalDefence", as = "signed" } }, total = "phys",
                             total_add = "fields.PhysicalDefence" } } }
     local p = Model.panel(e, ring_raw({ fields = { PhysicalDefence = 50 } }), nil, off(1000, 900))
-    eq(texts(p), "approx:≈ +50 к физ. защите | approx:≈ защита 1000 → 1050 (+5%) | approx:≈ -5% физ. урона по тебе",
+    eq(texts(p), "approx:≈ +50 к физ. защите | approx:≈ защита 1000 → 1050 (+5%) | approx:≈ до -5% физ. урона по тебе",
         "≈ on all three")
     eq(p.legend, true, "legend")
     e.lines[1].mark = "guess"
-    eq(texts(Model.panel(e, ring_raw({ fields = { PhysicalDefence = 50 } }), nil, off(1000, 900))),
-        "guess:? +50 к физ. защите | guess:? защита 1000 → 1050 (+5%) | approx:≈ -5% физ. урона по тебе", "a guess")
+    p = Model.panel(e, ring_raw({ fields = { PhysicalDefence = 50 } }), nil, off(1000, 900))
+    eq(texts(p), "guess:? +50 к физ. защите | guess:? защита 1000 → 1050 (+5%) | guess:? до -5% физ. урона по тебе",
+        "? on all three")
+    eq(p.legend, true, "legend")
+    I18n.set("ru")
+end)
+
+-- A made-up defence line with this mark, its bonus 50 from the ring field PhysicalDefence; the total 1000 → 1050.
+local function marked(mark, who)
+    local e = { lines = { { mark = mark, ru = "{1} к физ. защите", en = "{1} defense",
+                            nums = { { src = "fields.PhysicalDefence", as = "signed" } }, total = "phys",
+                            total_add = "fields.PhysicalDefence" } } }
+    return Model.panel(e, ring_raw({ fields = { PhysicalDefence = 50 } }), nil, off(1000, 900, who))
+end
+
+test("the damage line under a plain line: plain, «до» / \"up to\", and no legend of its own", function()
+    I18n.set("ru")
+    local p = marked("plain")
+    eq(p.lines[3].text, "до -5% физ. урона по тебе", "no prefix")
+    eq(p.lines[3].mark, "plain", "plain")
+    eq(p.legend, false, "nothing else marked: no legend")
+    -- Кольцо стойкости, as the game has it
+    local steel = Model.panel(Data.ring(3509), ring_raw({ fields = { PhysicalDefence = 50 } }), nil, off(1486, 1337))
+    eq(steel.lines[3].text, "до -3% физ. урона по тебе", "Кольцо стойкости")
+    eq(steel.lines[3].mark, "plain", "Кольцо стойкости: plain")
+    eq(steel.legend, false, "Кольцо стойкости: no legend")
+    I18n.set("en")
+    p = marked("plain")
+    eq(p.lines[3].text, "up to -5% physical damage taken", "en")
+    eq(p.lines[3].mark, "plain", "en plain")
+    eq(p.legend, false, "en no legend")
+    I18n.set("ru")
+end)
+
+test("the damage line under a ≈ line: «≈ до», approx", function()
+    I18n.set("ru")
+    local p = marked("approx")
+    eq(p.lines[3].text, "≈ до -5% физ. урона по тебе", "≈ до")
+    eq(p.lines[3].mark, "approx", "approx")
+    eq(p.legend, true, "the legend")
+    I18n.set("en")
+    eq(marked("approx").lines[3].text, "≈ up to -5% physical damage taken", "en")
+    I18n.set("ru")
+end)
+
+test("the damage line under a ? line: «? до», guess (a guessed bonus keeps its ? on what comes of it)", function()
+    I18n.set("ru")
+    local p = marked("guess")
+    eq(p.lines[3].text, "? до -5% физ. урона по тебе", "? до")
+    eq(p.lines[3].mark, "guess", "guess")
+    eq(p.legend, true, "the legend")
+    I18n.set("en")
+    eq(marked("guess").lines[3].text, "? up to -5% physical damage taken", "en")
+    I18n.set("ru")
+end)
+
+test("the pawn's damage line, in both languages, by each mark", function()
+    I18n.set("ru")
+    eq(marked("plain", "pawn").lines[3].text, "до -5% физ. урона по пешке", "plain")
+    eq(marked("approx", "pawn").lines[3].text, "≈ до -5% физ. урона по пешке", "≈")
+    eq(marked("guess", "pawn").lines[3].text, "? до -5% физ. урона по пешке", "?")
+    eq(marked("plain", "pawn").legend, false, "plain: no legend")
+    -- Изгнание on the pawn: the magick form
+    local apo = Model.panel(Data.augment("Job03_00"), { v1 = 45, v2 = 30 }, { who = "pawn", magic_defence = 373.8 },
+        on(1645, 1494.94, "pawn"))
+    eq(texts(apo), "plain:+45 и +30% от базовой маг. защиты (у пешки 373) — сейчас +157"
+        .. " | plain:маг. защита 1337 → 1494 (+12%) | plain:до -11% маг. урона по пешке", "Изгнание, the pawn")
+    eq(apo.legend, false, "Изгнание: no legend")
+    I18n.set("en")
+    eq(marked("plain", "pawn").lines[3].text, "up to -5% physical damage the pawn takes", "en plain")
+    eq(marked("approx", "pawn").lines[3].text, "≈ up to -5% physical damage the pawn takes", "en ≈")
+    eq(marked("guess", "pawn").lines[3].text, "? up to -5% physical damage the pawn takes", "en ?")
+    eq(Model.panel(Data.augment("Job03_00"), { v1 = 45, v2 = 30 }, { who = "pawn", magic_defence = 373.8 },
+        on(1645, 1494.94, "pawn")).lines[3].text, "up to -11% magick damage the pawn takes", "en Изгнание, the pawn")
     I18n.set("ru")
 end)
 

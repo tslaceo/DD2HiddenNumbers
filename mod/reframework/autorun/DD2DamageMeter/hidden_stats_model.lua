@@ -41,11 +41,12 @@
 --     else total_add's value (a ring's field); equipped: before = total − bonus, after = total; not: before =
 --     total, after = total + bonus. Left out when the total, the bonus or whether it is equipped is unknown, or when
 --     before or after is not above 0: never guessed.
---   - Under a total line, the damage taken: «≈ -10% физ. урона по тебе» (hs_damage_<phys|magic>_<yours|
---     pawns> by total.who), −round((1 − before / after) × 100) with its sign; always ≈: the game's step is
---     damage × C / (C + D), D the total defence, C about 113 against the enemy measured (its attack, probably), and
---     this is its C-free form: for Стойкость's −10 % the real cut is 7 to 10 %, by the enemy. Left out with the
---     total line, and when who is not known.
+--   - Under a total line, the most damage taken it can cut, with the line's mark as the total line has it: «до -10%
+--     физ. урона по тебе» (hs_damage_<phys|magic>_<yours|pawns> by total.who), −round((1 − before / after) × 100)
+--     with its sign. "Up to" («до»): the game's step is damage × C / (C + D), D the total defence, C about 113
+--     against the enemy measured (its attack, probably), and this is its C-free form, the cut's upper bound: for
+--     Стойкость's −10 % the real cut is 7 to 10 %, by the enemy. Left out with the total line, and when who is not
+--     known.
 local I18n = require("DD2DamageMeter/i18n")
 
 local HiddenStatsModel = {}
@@ -206,7 +207,7 @@ function HiddenStatsModel.panel(entry, raw, base, total)
             add(text, line.mark)
             local sum, damage = total_lines(line, raw, bonus, total)
             if sum then add(sum, line.mark) end
-            if damage then add(damage, "approx") end
+            if damage then add(damage, line.mark) end
         end
     end
     if #lines == 0 then return entry.or_none and none_panel() or nil end

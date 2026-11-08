@@ -275,7 +275,7 @@ return {
     -- base stat the base in brackets and the personal number (%s: "380", "+159") for the player or the
     -- pawn, and the hint when the base is not known; the word for whose base it is ({whose} of the data's English
     -- texts: the Russian ones say it in the brackets, so these are empty); under a defence line the total before →
-    -- after and its percent, then the damage taken (%s: "-10%")
+    -- after and its percent, then the most damage taken it can cut (%s: "-10%")
     hs_none = "числа в игре не нашлось",
     hs_legend = "≈ другие моды не подтверждают · ? догадка",
     hs_yours = "(у тебя %s) — сейчас %s",
@@ -286,10 +286,10 @@ return {
     hs_whose_none = "",
     hs_total_phys = "защита %s → %s (%s)",
     hs_total_magic = "маг. защита %s → %s (%s)",
-    hs_damage_phys_yours = "%s физ. урона по тебе",
-    hs_damage_phys_pawns = "%s физ. урона по пешке",
-    hs_damage_magic_yours = "%s маг. урона по тебе",
-    hs_damage_magic_pawns = "%s маг. урона по пешке",
+    hs_damage_phys_yours = "до %s физ. урона по тебе",
+    hs_damage_phys_pawns = "до %s физ. урона по пешке",
+    hs_damage_magic_yours = "до %s маг. урона по тебе",
+    hs_damage_magic_pawns = "до %s маг. урона по пешке",
 
     -- the journal: vocations (the game's JobEnum order)
     job_1 = "Боец",
