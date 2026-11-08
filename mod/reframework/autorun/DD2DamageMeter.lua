@@ -15,9 +15,10 @@
 -- A new fight that opens at most RETURN_WINDOW (30) s after the last kept fight ended may be that fight going on
 -- (the game can end a battle when the player falls and is put back, and make the enemy anew): its first friend's blow
 -- on a living enemy decides, if it lands inside those 30 s. When that enemy has the CharaID of an enemy the kept fight
--- left alive, and an HP before the blow at most RETURN_HP_BELOW (2 %) of that enemy's max HP below the HP it was left
--- with and at most RETURN_HP_ABOVE (0.1 %, at least 1 HP) above it (an enemy does not come back healed, but it
--- can come back a little lower: damage after the finish, DoT ticks), the kept fight goes on in place of the new one:
+-- left alive after a counted hit on it, and an HP before the blow at most RETURN_HP_BELOW (2 %) of that enemy's max HP
+-- below the HP that hit left (not the HP its bar showed later: an enemy only seen at full HP is none) and at most
+-- RETURN_HP_ABOVE (0.1 %, at least 1 HP) above it (an enemy does not come back healed, but it can come back a
+-- little lower: damage after the finish, DoT ticks), the kept fight goes on in place of the new one:
 -- the new object counts as that enemy (fight.lua's alias), the hits and heals the new fight took before the blow (at
 -- most RETURN_KEEP) are counted in it, the time from its end to the new fight's start is no fighting time, and when
 -- it ends again its snapshot takes its own history entry's place (the journal stays on what it showed; history.json
@@ -147,8 +148,8 @@
 -- A kept screen the game destroyed before either told is still caught by its own read (the last guard: its
 -- get_DrawSelf raises and it is dropped). The party's HP poll and skill states read the characters of that frame's
 -- listing, never ones kept from an earlier one (game/actors.lua, game/heals.lua); a party read without a player reads
--- no pawn. With `debug` on, debug.log tells each of these by frame (world_frame, on_scene_change, note_gone), so that an exit to the title shows
--- which came first.
+-- no pawn. With `debug` on, debug.log tells each of these by frame (world_frame, on_scene_change, note_gone), so
+-- that an exit to the title shows which came first.
 --
 -- Reload-safe: the state lives in the global DD2DM (DD2DM.state) and survives a
 -- reload of this file; every method is hooked once per Lua state (game/hook.lua), the frame and menu callbacks are
@@ -609,9 +610,10 @@ end
 -- what the open fight took so far (R[1..n] = { item = Hit or Heal, heal = true | nil }). S.continued: the history
 -- entry the open fight, a continued one, replaces when it ends.
 
--- An enemy a returning one can be: left alive, with a CharaID and a known HP.
+-- An enemy a returning one can be: left alive, with a CharaID and an HP a counted hit on it left (hit_hp: the HP its
+-- bar's numbers read, Fight:note_hp, is not taken, so an enemy only seen at full HP is none).
 local function returnable(e)
-    return not e.killed and type(e.hp) == "number" and math.type(e.actor.chara_id) == "integer"
+    return not e.killed and type(e.hit_hp) == "number" and math.type(e.actor.chara_id) == "integer"
 end
 
 local function continuable(fight)
@@ -629,17 +631,17 @@ local function friend_blow(h)
 end
 
 -- The enemy of `fight` that the victim of `h` is, back: left alive, of the victim's CharaID, with the hit's hp0 at most
--- RETURN_HP_BELOW below the HP it was left with and at most RETURN_HP_ABOVE above it; the closest (then the
--- lowest key) when there are more; nil when none.
+-- RETURN_HP_BELOW below the HP its last counted hit left (hit_hp) and at most RETURN_HP_ABOVE above it; the closest
+-- (then the lowest key) when there are more; nil when none.
 local function returning_enemy(fight, h)
     local id = h.victim.chara_id
     if math.type(id) ~= "integer" then return nil end
     local best, best_d = nil, nil
     for key, e in pairs(fight.enemies) do
         if returnable(e) and e.actor.chara_id == id then
-            local max = e.max_hp or 0
-            local d = math.abs(h.hp0 - e.hp)
-            if h.hp0 >= e.hp - RETURN_HP_BELOW * max and h.hp0 <= e.hp + math.max(1, RETURN_HP_ABOVE * max)
+            local max, left = e.max_hp or 0, e.hit_hp
+            local d = math.abs(h.hp0 - left)
+            if h.hp0 >= left - RETURN_HP_BELOW * max and h.hp0 <= left + math.max(1, RETURN_HP_ABOVE * max)
                     and (best == nil or d < best_d or (d == best_d and key < best)) then
                 best, best_d = key, d
             end
@@ -1205,7 +1207,11 @@ end
 -- them was not read) goes to the open fight's enemy under the bar (Fight:note_hp), and to the live window's enemy line
 -- when it is about that enemy: that line is built every LIVE_EVERY s from the HP the counted hits left, and so lagged
 -- the numbers by a hit or by HP the game took away outside them. No game call of its own: the bar's character is
--- matched to the Actor the hits made by its address (actors.cached).
+-- matched to the Actor the hits made by its address (actors.cached), and a bar whose full HP is not the full HP the
+-- fight's Actor of that enemy has is another character at a reused address: Fight:note_hp leaves it out (checked
+-- there, on the fight's own Actor: the enemy plate's actors.of may have cached the newcomer under the same key). An
+-- HP of 0 or less is left out too (a kill is a counted hit's), and the HP a returning enemy is matched against stays
+-- the counted hits' (returnable).
 local function meter_hp(bars, boss)
     local fight = S.fight
     local header = S.live_model and S.live_model.header

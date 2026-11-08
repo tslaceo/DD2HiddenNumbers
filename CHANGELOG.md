@@ -4,6 +4,11 @@
 
 - Blind now has a ? after it on the enemy plate, in the journal and under a boss's bar: the game keeps a Blind flag
   for each enemy, but nothing found in the game builds it up yet.
+- The enemy's health at the top of the meter now matches the number by the boss's bar (or over the enemy's head)
+  frame for frame. It used to lag a hit or more behind. The fight summary and the journal show the health that
+  number last showed.
+- Hidden stats: the rings that only work without pawns no longer give a pawn the status-screen hint when that pawn's
+  stats can't be read.
 
 ## 1.0.0
 

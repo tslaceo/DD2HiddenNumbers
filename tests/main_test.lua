@@ -1844,6 +1844,92 @@ test("the fight line counts the hits that waited for an enemy the party never fo
     eq(M.info().errors, 0, "no error caught")
 end)
 
+-- The game's HP bars: the scene, a bar over a head, the boss bar (the HP numbers, the meter's enemy line and the
+-- returning enemies use them) -------------------------------------------------------------------------
+
+-- The game calls that read the scene's GUIs and whether one is drawn.
+local GUI_READS = { get_CurrentScene = true, ["findComponents(System.Type)"] = true, get_DrawSelf = true }
+
+-- The game's HP bars over heads (game/gauges.lua): the current scene's GUIs are W.guis. The hidden-stats panel looks
+-- through the same GUIs for its screens (game/hidden_screens.lua, every 0.5 s while none is drawn, paused or not):
+-- the reads made inside HiddenScreens.current are counted apart, in W.hidden_reads.
+local function bars_scene()
+    W.guis = {}
+    R.type("via.gui.GUI")
+    R.type("app.ui020601")
+    W.scene = R.object("via.Scene", {}, {
+        ["findComponents(System.Type)"] = function(_, t)
+            if t == nil or t.runtime_type ~= "via.gui.GUI" then return nil end
+            local arr = R.object("via.gui.GUI[]")
+            arr.items = W.guis
+            return arr
+        end,
+    })
+    R.method("via.SceneManager", "get_CurrentScene", function() return W.scene end, STATIC)
+    R.native("via.SceneManager", R.object("via.SceneManager"))
+    local HS = mod("game/hidden_screens")
+    local current = HS.current
+    W.hidden_reads = {}
+    HS.current = function(...)
+        local from = #R.calls
+        local hover = current(...)
+        for i = from + 1, #R.calls do
+            local sig = R.calls[i].sig
+            if GUI_READS[sig] then W.hidden_reads[sig] = (W.hidden_reads[sig] or 0) + 1 end
+        end
+        return hover
+    end
+end
+
+-- A bar over `c`, drawn and hostile unless o says otherwise (g.drawn, g.hostile change it later), centred at
+-- (o.x, o.y) in GUI space (960, 400 by default).
+local function gauge(c, o)
+    o = o or {}
+    local g = { drawn = o.drawn ~= false, hostile = o.hostile ~= false }
+    g.panel = R.object("via.gui.Panel", {}, {
+        get_GlobalPosition = function() return { x = o.x or 960, y = o.y or 400, z = 0 } end,
+    })
+    g.comp = R.object("app.ui020601", { CompChara = c, All = g.panel })
+    setmetatable(g.comp.fields, { __index = function(_, k) if k == "IsHostile" then return g.hostile end end })
+    g.go = R.object("via.GameObject", {}, {
+        get_Name = function() return "ui020601" end,
+        get_DrawSelf = function() return g.drawn end,
+        ["getComponent(System.Type)"] = function() return g.comp end,
+    })
+    g.gui = R.object("via.gui.GUI", {}, { get_GameObject = function() return g.go end })
+    W.guis[#W.guis + 1] = g.gui
+    return g
+end
+
+-- The boss bar at the top of the screen (ui020501) over `c`: drawn unless o.drawn is false (b.drawn changes it later),
+-- its base element s9g_Base under All, 776 × 7, at (564, 106) in GUI space as on a 16:9 display (b.x, b.y move it).
+-- As in the game, its Target is c's GameObject (whose getComponent(System.Type) gives c for app.Character) and its
+-- TargetHitCtrl c's hit controller (get_CachedCharacter gives c).
+local function boss_bar(c, o)
+    o = o or {}
+    R.type("app.ui020501")
+    c.go.methods["getComponent(System.Type)"] = function(_, t)
+        if t ~= nil and t.runtime_type == "app.Character" then return c end
+        return nil
+    end
+    local b = { drawn = o.drawn ~= false, x = 564, y = 106 }
+    b.base = R.object("via.gui.Scale9Grid", {}, {
+        get_Name = function() return "s9g_Base" end,
+        get_GlobalPosition = function() return { x = b.x, y = b.y, z = 0 } end,
+        get_Size = function() return { w = 776, h = 7 } end,
+    })
+    b.all = R.object("via.gui.Panel", {}, { get_Child = function() return b.base end })
+    b.comp = R.object("app.ui020501", { Target = c.go, TargetHitCtrl = c.hc, All = b.all })
+    b.go = R.object("via.GameObject", {}, {
+        get_Name = function() return "ui020501" end,
+        get_DrawSelf = function() return b.drawn end,
+        ["getComponent(System.Type)"] = function() return b.comp end,
+    })
+    b.gui = R.object("via.gui.GUI", {}, { get_GameObject = function() return b.go end })
+    W.guis[#W.guis + 1] = b.gui
+    return b
+end
+
 -- A returning enemy continues the fight ------------------------------------------------------------------
 
 -- A lesser demon (CharaID 7 unless said, 260 000 HP) at `hp`: each call a new game object, as the game makes it anew.
@@ -1970,9 +2056,10 @@ end)
 test("no continuation when the hit is late, another kind, another HP, the enemy was killed or the fight dropped",
     function()
     -- `fight_a` makes the fight before (nil: the demon left at 22 612), then `first` lands the new fight's first blows
-    -- at 115.5 unless said; the new fight is a fight of its own
-    local function separate(what, first, fight_a)
+    -- at 115.5 unless said; the new fight is a fight of its own. `setup` readies the game before the mod loads.
+    local function separate(what, first, fight_a, setup)
         world({ settings = { debug = true } })
+        if setup then setup() end
         local M = load()
         frame()
         if fight_a then fight_a() else demon_fight() end
@@ -2043,6 +2130,41 @@ test("no continuation when the hit is late, another kind, another HP, the enemy 
         hit(W.player, W.goblin, 10, W.goblin.hp - 10)
         hit(W.player, demon(22612), 1000, 21612)  -- too late: the first blow decided
     end)
+    -- a demon the party never hit, that only clawed the player while `bar` was drawn over it (a bar over its head, or
+    -- the boss bar; there before the mod's first look at the scene): its HP is known from the bar's numbers, full, and
+    -- is no HP a counted hit left; the other demon was killed. An untouched demon of the kind at full HP 12 s after: a
+    -- fight of its own. Gives the fight before and the setup.
+    local function only_clawed(bar)
+        local clawing
+        local function setup()
+            bars_scene()
+            clawing = demon()
+            bar(clawing)
+        end
+        local function fight_a()
+            local killed = demon()
+            W.mode = 2
+            frame_at(50)
+            hit(W.player, killed, 260000, 0)
+            hit(clawing, W.player, 300, W.player.hp - 300)
+            frame_at(51)                          -- the bar's numbers read: 260 000 / 260 000
+            eq(DD2DM.state.fight:snapshot(51).enemies[mod("game/actors").of(clawing).key].hp, 260000,
+                "the clawing demon's HP from its bar")
+            W.mode, W.ending = 0, true
+            frame_at(100)
+            frame_at(103.1)
+            W.ending = false
+        end
+        return fight_a, setup
+    end
+    local function fresh_demon()
+        frame_at(115)
+        hit(W.player, demon(), 1000, 259000)
+    end
+    local fight_a, setup = only_clawed(gauge)
+    separate("an untouched demon, its bar over its head seen", fresh_demon, fight_a, setup)
+    fight_a, setup = only_clawed(boss_bar)
+    separate("an untouched demon, its boss bar seen", fresh_demon, fight_a, setup)
 end)
 
 test("the demon's real numbers: left at 22 612, back at 21 504.8 (0.43 % lower), it continues the fight",
@@ -3247,60 +3369,6 @@ end)
 
 -- The enemy HP numbers ---------------------------------------------------------------------------------
 
--- The game calls that read the scene's GUIs and whether one is drawn.
-local GUI_READS = { get_CurrentScene = true, ["findComponents(System.Type)"] = true, get_DrawSelf = true }
-
--- The game's HP bars over heads (game/gauges.lua): the current scene's GUIs are W.guis. The hidden-stats panel looks
--- through the same GUIs for its screens (game/hidden_screens.lua, every 0.5 s while none is drawn, paused or not):
--- the reads made inside HiddenScreens.current are counted apart, in W.hidden_reads.
-local function bars_scene()
-    W.guis = {}
-    R.type("via.gui.GUI")
-    R.type("app.ui020601")
-    W.scene = R.object("via.Scene", {}, {
-        ["findComponents(System.Type)"] = function(_, t)
-            if t == nil or t.runtime_type ~= "via.gui.GUI" then return nil end
-            local arr = R.object("via.gui.GUI[]")
-            arr.items = W.guis
-            return arr
-        end,
-    })
-    R.method("via.SceneManager", "get_CurrentScene", function() return W.scene end, STATIC)
-    R.native("via.SceneManager", R.object("via.SceneManager"))
-    local HS = mod("game/hidden_screens")
-    local current = HS.current
-    W.hidden_reads = {}
-    HS.current = function(...)
-        local from = #R.calls
-        local hover = current(...)
-        for i = from + 1, #R.calls do
-            local sig = R.calls[i].sig
-            if GUI_READS[sig] then W.hidden_reads[sig] = (W.hidden_reads[sig] or 0) + 1 end
-        end
-        return hover
-    end
-end
-
--- A bar over `c`, drawn and hostile unless o says otherwise (g.drawn, g.hostile change it later), centred at
--- (o.x, o.y) in GUI space (960, 400 by default).
-local function gauge(c, o)
-    o = o or {}
-    local g = { drawn = o.drawn ~= false, hostile = o.hostile ~= false }
-    g.panel = R.object("via.gui.Panel", {}, {
-        get_GlobalPosition = function() return { x = o.x or 960, y = o.y or 400, z = 0 } end,
-    })
-    g.comp = R.object("app.ui020601", { CompChara = c, All = g.panel })
-    setmetatable(g.comp.fields, { __index = function(_, k) if k == "IsHostile" then return g.hostile end end })
-    g.go = R.object("via.GameObject", {}, {
-        get_Name = function() return "ui020601" end,
-        get_DrawSelf = function() return g.drawn end,
-        ["getComponent(System.Type)"] = function() return g.comp end,
-    })
-    g.gui = R.object("via.gui.GUI", {}, { get_GameObject = function() return g.go end })
-    W.guis[#W.guis + 1] = g.gui
-    return g
-end
-
 -- The enemy plate's backing drawn this frame on the background list, nil without one.
 local function plate_box()
     local back = mod("ui/enemy_plate").COLORS.back
@@ -3479,35 +3547,6 @@ test("a bar or a character that raises does not break the frame; a new world for
     eq(gauges.count(), 0, "forgotten with the old world")
 end)
 
--- The boss bar at the top of the screen (ui020501) over `c`: drawn unless o.drawn is false (b.drawn changes it later),
--- its base element s9g_Base under All, 776 × 7, at (564, 106) in GUI space as on a 16:9 display (b.x, b.y move it).
--- As in the game, its Target is c's GameObject (whose getComponent(System.Type) gives c for app.Character) and its
--- TargetHitCtrl c's hit controller (get_CachedCharacter gives c).
-local function boss_bar(c, o)
-    o = o or {}
-    R.type("app.ui020501")
-    c.go.methods["getComponent(System.Type)"] = function(_, t)
-        if t ~= nil and t.runtime_type == "app.Character" then return c end
-        return nil
-    end
-    local b = { drawn = o.drawn ~= false, x = 564, y = 106 }
-    b.base = R.object("via.gui.Scale9Grid", {}, {
-        get_Name = function() return "s9g_Base" end,
-        get_GlobalPosition = function() return { x = b.x, y = b.y, z = 0 } end,
-        get_Size = function() return { w = 776, h = 7 } end,
-    })
-    b.all = R.object("via.gui.Panel", {}, { get_Child = function() return b.base end })
-    b.comp = R.object("app.ui020501", { Target = c.go, TargetHitCtrl = c.hc, All = b.all })
-    b.go = R.object("via.GameObject", {}, {
-        get_Name = function() return "ui020501" end,
-        get_DrawSelf = function() return b.drawn end,
-        ["getComponent(System.Type)"] = function() return b.comp end,
-    })
-    b.gui = R.object("via.gui.GUI", {}, { get_GameObject = function() return b.go end })
-    W.guis[#W.guis + 1] = b.gui
-    return b
-end
-
 -- The enemy number drawn this frame whose text is `text` (its text-coloured copy), nil without one.
 local function number_call(text)
     local beige = mod("ui/enemy_bars").COLORS.text
@@ -3603,6 +3642,46 @@ local function calls_on_char(c)
     return n
 end
 
+-- One frame (frame()); the game calls it made, on every object and the statics, in order.
+local function frame_calls()
+    local from = #R.calls
+    frame()
+    return table.move(R.calls, from + 1, #R.calls, 1, {})
+end
+
+-- Each call as "<object> <owner>.<method>": the object by the order it first comes in `calls` ("o1", "o2"...; "static"
+-- for none), so that a list the game makes anew for each call (the pawns') is the same in two frames.
+local function call_keys(calls)
+    local keys, seen, n = {}, {}, 0
+    for i, c in ipairs(calls) do
+        local o = "static"
+        if c.this ~= nil then
+            if not seen[c.this] then
+                n = n + 1
+                seen[c.this] = "o" .. n
+            end
+            o = seen[c.this]
+        end
+        keys[i] = o .. " " .. tostring(c.owner) .. "." .. c.sig
+    end
+    return keys
+end
+
+-- The calls made on the objects of `names` (object -> name): "<name> <method> <count>", sorted, joined by ", ".
+local function tally(calls, names)
+    local counts, list = {}, {}
+    for _, c in ipairs(calls) do
+        local name = names[c.this]
+        if name then
+            local k = name .. " " .. c.sig
+            counts[k] = (counts[k] or 0) + 1
+        end
+    end
+    for k, n in pairs(counts) do list[#list + 1] = k .. " " .. n end
+    table.sort(list)
+    return table.concat(list, ", ")
+end
+
 test("the meter's enemy line shows the HP the boss bar's numbers show, in the same frame, from their one read",
         function()
     -- seen in game: the meter's line said 151 551 while the boss bar and its numbers said 149 232
@@ -3630,14 +3709,64 @@ test("the meter's enemy line shows the HP the boss bar's numbers show, in the sa
     eq(ui.has_text("148 000 / 200 000"), true, "the meter's line in the same frame")
     frame(0.2)
     eq(ui.has_text("148 000 / 200 000"), true, "and after the live window's next build")
-    -- no game read of its own: the drake's HP is read once a frame, for the numbers
-    local before = calls_on_char(drake)
-    frame()
-    eq(calls_on_char(drake) - before, 2, "get_Hp and get_OriginalMaxHp, once each, by the numbers")
+    -- no game call of its own: a frame's calls, on every object the game gives (the drake, its hit controller and
+    -- GameObject, the boss bar's objects, the managers, the statics), are those of a frame in which the meter takes
+    -- nothing from the bar (no Actor matched)
+    local actors = mod("game/actors")
+    local cached = actors.cached
+    actors.cached = function() return nil end
+    local idle = frame_calls()
+    eq(ui.has_text("148 000 / 200 000"), true, "the line as it was")
+    actors.cached = cached
+    drake.hp = 147000
+    local taking = frame_calls()
+    eq(ui.has_text("147 000 / 200 000"), true, "the line took the bar's HP")
+    eq(table.concat(call_keys(taking), "\n"), table.concat(call_keys(idle), "\n"), "the same calls, in the same order")
+    -- of the boss's own objects, only the numbers' read: its HP and full HP, the bar's boss through its hit controller
+    eq(tally(taking, { [drake] = "drake", [drake.hc] = "hc", [drake.go] = "go" }),
+        "drake get_Hp 1, drake get_OriginalMaxHp 1, hc get_CachedCharacter 1", "the boss's objects")
     -- the fight keeps it: the summary's enemy row
     end_battle()
     local row = M.state.summary_model.enemies[1]
-    eq(row.label, "Drake", "the drake's row"); eq(row.hp_text, "148 000 / 200 000 HP", "its HP as the bar showed it")
+    eq(row.label, "Drake", "the drake's row"); eq(row.hp_text, "147 000 / 200 000 HP", "its HP as the bar showed it")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
+test("the meter's enemy line: a bar over another character at a reused address, or at 0 HP, is left out", function()
+    -- the enemy plate on: its look at the bars caches the newcomer under the address's key
+    world({ settings = { boss_hp_numbers = "off", buildup_bars = false } })
+    bars_scene()
+    local M = load()
+    local actors = mod("game/actors")
+    local g = gauge(W.goblin)
+    W.mode = 2
+    frame()
+    strike()
+    frame(0.2)
+    eq(ui.has_text("3 043 / 3 700"), true, "the goblin's line")
+    local key = actors.of(W.goblin).key
+    -- the goblin goes, alive; the game gives its address to an ogre, under the bar
+    local ogre = char("ch230001_00_1", { name = "Ogre", hostile = true, hp = 8000, max_hp = 9000 })
+    ogre.addr = W.goblin.addr
+    g.comp.fields.CompChara = ogre
+    frame()
+    eq(numbers(), "8 000 / 9 000 · 89%", "the ogre's numbers")
+    eq(actors.cached(ogre).key, key, "the address's Actor")
+    eq(ui.has_text("3 043 / 3 700"), true, "the line still the goblin's")
+    frame(0.2)
+    eq(actors.cached(ogre).max_hp, 9000, "the plate's look cached the ogre, under the same key")
+    eq(actors.cached(ogre).key, key, "the same key")
+    frame()
+    eq(ui.has_text("3 043 / 3 700"), true, "the line still the goblin's")
+    local e = M.state.fight:snapshot(M.state.t).enemies[key]
+    near(e.hp, 3043.035, 1e-6, "the goblin's HP untouched"); eq(e.max_hp, 3700, "its full HP too")
+    -- the goblin back under the bar at 0 HP (something the hits do not see): no kill, its HP stays
+    g.comp.fields.CompChara = W.goblin
+    W.goblin.hp = 0
+    frame()
+    eq(numbers(), "0 / 3 700 · 0%", "its numbers")
+    e = M.state.fight:snapshot(M.state.t).enemies[key]
+    near(e.hp, 3043.035, 1e-6, "its HP stays"); eq(e.killed, false, "not killed")
     eq(M.info().errors, 0, "no error caught")
 end)
 

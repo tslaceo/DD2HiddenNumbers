@@ -50,6 +50,8 @@
 --          is no enemy of the fight); fight.aliases[key] -> that enemy's Actor
 --   fight:note_hp(key, hp, full) -> enemy key, its entry | nil   the HP character `key` has now as the game shows it
 --          (read outside the hits): the fight's enemy it counts as takes it as its HP left (see the function)
+--   fight.enemies[key].hit_hp: the HP the last counted hit on that enemy left (nil before one; note_hp never sets
+--          it), what a returning enemy is matched against (DD2DamageMeter.lua); not in a snapshot
 --   fight:held(), fight:snapshot(now, full) -> { t0, t1, outcome, duration, paused, actors, enemies, types, detail }
 --     duration = (t1 or now) - t0 - paused; paused: the seconds it stood still (reopen), nil when none
 --     enemies[key] = { actor, max_hp, hp (the HP left after the last counted hit on it or note_hp, whichever came
@@ -164,7 +166,8 @@ function Fight.kind_key(actor)
 end
 
 -- An enemy of the fight. One that has only hit the party's side so far has the full HP of its actor and no hp
--- (unknown: the view shows the full HP).
+-- (unknown: the view shows the full HP). hit_hp: the HP the last counted hit on it left, nil before one (note_hp never
+-- sets it): what a returning enemy is matched against (DD2DamageMeter.lua), never in a snapshot.
 local function enemy_entry(self, actor)
     local e = self.enemies[actor.key]
     if not e then
@@ -180,6 +183,7 @@ local function track_enemy(self, victim, hit, by)
     local e = enemy_entry(self, victim)
     e.max_hp = math.max(e.max_hp, hit.hp0)
     e.hp = math.max(hit.hp1, 0)
+    e.hit_hp = e.hp
     if hit.hp1 <= 0 and not e.killed then
         e.killed = true
         e.killed_at = math.max(0, (hit.t or self.t0) - self.t0 - self.paused)
@@ -308,6 +312,7 @@ local function fold(self, from, keep)
         local et = enemy_entry(self, keep)
         et.max_hp = math.max(et.max_hp, ef.max_hp or 0)
         if et.hp == nil or (ef.hp ~= nil and ef.hp < et.hp) then et.hp = ef.hp end
+        if et.hit_hp == nil or (ef.hit_hp ~= nil and ef.hit_hp < et.hit_hp) then et.hit_hp = ef.hit_hp end
         if ef.killed and not et.killed then et.killed, et.killed_at, et.killer = true, ef.killed_at, ef.killer end
         if ef.last_hit and (et.last_hit == nil or ef.last_hit > et.last_hit) then et.last_hit = ef.last_hit end
         self.enemies[from] = nil
@@ -353,9 +358,10 @@ local function fold(self, from, keep)
         self.pending_n = self.pending_n - #held
         -- counted after the hit that linked, their HP is older: the pool keeps its lowest
         local e = self.enemies[to]
-        local hp = e and e.hp
+        local hp, hit_hp = e and e.hp, e and e.hit_hp
         for _, h in ipairs(held) do count_hit(self, h) end
         if e and hp and e.hp and hp < e.hp then e.hp = hp end
+        if e and hit_hp and e.hit_hp and hit_hp < e.hit_hp then e.hit_hp = hit_hp end
     end
 end
 
@@ -566,17 +572,24 @@ end
 -- The HP character `key` has now, as the game shows it, read outside the hits (DD2DamageMeter.lua: the HP numbers'
 -- read of a frame): the HP the game takes away (or gives back) where no counted hit sees it, and the HP of a hit
 -- before the live window's next build. The fight's enemy it counts as (itself, the body kept for a linked body, the
--- enemy a returning enemy's new object continues) takes `hp` as its HP left (0 at the least) and `full` as its full
--- HP when that is more. Nothing for a key that is no enemy of the fight, a killed one (its 0 and its kill stay), or an
--- `hp` that is not a finite number (a `full` that is not one is left out). Gives that enemy's key and its entry (the
--- fight's own table, to read: max_hp, hp, killed), nil when nothing was taken.
+-- enemy a returning enemy's new object continues) takes `hp` as its HP left and `full` as its full HP when that is
+-- more. Nothing for:
+--   - a key that is no enemy of the fight, or a killed one (its 0 and its kill stay);
+--   - an `hp` that is not a finite number above 0: an enemy dies by a counted hit, never by a read;
+--   - a `full` that differs from the full HP its Actor has (when that is known, above 0): another character than the
+--     one the fight met (an address the game gave anew); a `full` that is no finite number is not compared.
+-- Only `hp`: the HP its last counted hit left (hit_hp, what a returning enemy is matched against) stays as it was.
+-- Gives that enemy's key and its entry (the fight's own table, to read: max_hp, hp, killed), nil when nothing was
+-- taken.
 function Fight:note_hp(key, hp, full)
-    if not finite(hp) then return nil end
+    if not (finite(hp) and hp > 0) then return nil end
     local to = kept_as(self, key)
     if to then key = to.key end
     local e = self.enemies[key]
     if e == nil or e.killed then return nil end
-    e.hp = math.max(hp, 0)
+    local known = e.actor.max_hp
+    if finite(full) and finite(known) and known > 0 and full ~= known then return nil end
+    e.hp = hp
     if finite(full) and full > e.max_hp then e.max_hp = full end
     return key, e
 end
@@ -604,6 +617,7 @@ function Fight:snapshot(now, full)
     for k, e in pairs(self.enemies) do
         enemies[k] = copy_flat(e)
         enemies[k].actor = copy_flat(e.actor)
+        enemies[k].hit_hp = nil
     end
     return {
         t0 = self.t0, t1 = self.t1, outcome = self.outcome,

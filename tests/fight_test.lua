@@ -341,6 +341,7 @@ test("linked bodies: a mirror is never counted; the mirrored body joins the one 
     near(snap.actors[P0.key].dealt + snap.actors[PL.key].dealt, 3500, 1e-9, "dealt once")
     eq(#snap.detail.record, 3, "three lines in the record")
     eq(snap.enemies[EYE_A.key].hp, 646500, "the pool's HP")
+    eq(f.enemies[EYE_A.key].hit_hp, 646500, "the HP its hits left, the same")
 end)
 
 test("linked bodies: after the link the other body's hits and blows are the kept one's; it is never listed",
@@ -386,6 +387,7 @@ test("linked bodies: a mirror before its hit links too; the body the party hit f
     eq(snap.enemies[EYE_A.key], nil, "A folded into B"); eq(snap.actors[EYE_A.key], nil, "no entry for A")
     near(snap.actors[EYE_B.key].taken, 4000, 1e-9, "B has both hits"); eq(snap.actors[EYE_B.key].hits_taken, 2, "two")
     eq(snap.enemies[EYE_B.key].hp, 646000, "the pool's HP: the lower of the two")
+    eq(f.enemies[EYE_B.key].hit_hp, 646000, "the HP its hits left: the lower of the two too")
     near(snap.detail.foes[EYE_B.key].by[P0.key].dealt, 3000, 1e-9, "the card has the hit on A")
     near(snap.detail.foes[EYE_B.key].by[PL.key].dealt, 1000, 1e-9, "and the first one")
     eq(snap.detail.record[2].v, EYE_B.key, "the record names B")
@@ -658,39 +660,54 @@ test("note_hp: an enemy of the fight takes the HP the game shows now, read outsi
     local key, e = f:note_hp(MINO.key, 47681.5, 55000)
     eq(key, MINO.key, "its key"); eq(e, f.enemies[MINO.key], "its entry")
     near(f:snapshot(1).enemies[MINO.key].hp, 47681.5, 1e-9, "the HP shown")
-    -- HP up again (a heal the hits never see): taken too; a full HP above the known one raises it
-    f:note_hp(MINO.key, 48000, 56000)
-    local m = f:snapshot(1).enemies[MINO.key]
-    near(m.hp, 48000, 1e-9, "up"); near(m.max_hp, 56000, 1e-9, "full HP raised")
-    f:note_hp(MINO.key, 47000, 50000)
-    near(f:snapshot(1).enemies[MINO.key].max_hp, 56000, 1e-9, "never lowered")
-    near(f:snapshot(1).enemies[MINO.key].hp, 47000, 1e-9, "the HP")
+    -- the HP a returning enemy is matched against stays the hit's; no snapshot carries it
+    eq(f.enemies[MINO.key].hit_hp, 50000, "the hit's HP kept apart")
+    eq(f:snapshot(1).enemies[MINO.key].hit_hp, nil, "not in a snapshot")
+    -- HP up again (a heal the hits never see): taken too
+    f:note_hp(MINO.key, 48000, 55000)
+    near(f:snapshot(1).enemies[MINO.key].hp, 48000, 1e-9, "up")
     -- the next hit's HP after it, as before
-    f:add_hit(hit(PL, MINO, { hp0 = 47000, hp1 = 46000 }))
+    f:add_hit(hit(PL, MINO, { hp0 = 48000, hp1 = 46000 }))
     near(f:snapshot(1).enemies[MINO.key].hp, 46000, 1e-9, "a hit sets it")
-    -- an enemy that only hit the party: its HP is known from now on
+    eq(f.enemies[MINO.key].hit_hp, 46000, "and the hit's HP")
+    -- a full HP other than its Actor's: another character at that address, nothing taken
+    eq(f:note_hp(MINO.key, 8000, 9000), nil, "another full HP: nothing")
+    near(f:snapshot(1).enemies[MINO.key].hp, 46000, 1e-9, "its HP stays")
+    eq(f:snapshot(1).enemies[MINO.key].max_hp, 55000, "its full HP stays")
+    -- an enemy whose Actor has no full HP: the read one is taken, and raises the one the hits gave
+    f:add_hit(hit(PL, GOB2, { hp0 = 500, hp1 = 400 }))
+    f:note_hp(GOB2.key, 450, 700)
+    local g = f:snapshot(1).enemies[GOB2.key]
+    near(g.hp, 450, 1e-9, "its HP"); near(g.max_hp, 700, 1e-9, "full HP raised")
+    f:note_hp(GOB2.key, 430, 600)
+    near(f:snapshot(1).enemies[GOB2.key].max_hp, 700, 1e-9, "never lowered")
+    -- an enemy that only hit the party: its HP is known from now on, but no hit's HP
     f:add_hit(hit(GOB, PL, { hp0 = 2400, hp1 = 2300 }))
     eq(f:snapshot(1).enemies[GOB.key].hp, nil, "not known")
     f:note_hp(GOB.key, 3100, 3700)
     near(f:snapshot(1).enemies[GOB.key].hp, 3100, 1e-9, "known")
-    -- below 0 is 0
-    f:note_hp(GOB.key, -5, 3700)
-    near(f:snapshot(1).enemies[GOB.key].hp, 0, 1e-9, "0")
+    eq(f.enemies[GOB.key].hit_hp, nil, "no hit's HP")
+    -- 0 or below: nothing, the kill is a counted hit's
+    eq(f:note_hp(GOB.key, 0, 3700), nil, "0: nothing")
+    eq(f:note_hp(GOB.key, -5, 3700), nil, "below 0: nothing")
+    local gob = f:snapshot(1).enemies[GOB.key]
+    near(gob.hp, 3100, 1e-9, "its HP stays"); eq(gob.killed, false, "not killed")
     -- nothing for a character that is no enemy of the fight, a party member, an HP that is not a number
-    eq(f:note_hp(GOB2.key, 100, 500), nil, "no enemy of the fight")
-    eq(f:snapshot(1).enemies[GOB2.key], nil, "none made")
+    local GOB3 = actor("ch220003_00_17", "Goblin", "enemy", "ch220003_00", 3700)
+    eq(f:note_hp(GOB3.key, 100, 3700), nil, "no enemy of the fight")
+    eq(f:snapshot(1).enemies[GOB3.key], nil, "none made")
     eq(f:note_hp(PL.key, 100, 2400), nil, "the player")
     for _, bad in ipairs({ 0 / 0, math.huge, "5" }) do
-        eq(f:note_hp(MINO.key, bad, 56000), nil, "HP " .. tostring(bad))
+        eq(f:note_hp(MINO.key, bad, 55000), nil, "HP " .. tostring(bad))
     end
-    eq(f:note_hp(MINO.key, nil, 56000), nil, "no HP")
+    eq(f:note_hp(MINO.key, nil, 55000), nil, "no HP")
     near(f:snapshot(1).enemies[MINO.key].hp, 46000, 1e-9, "kept")
     f:note_hp(MINO.key, 45000, 0 / 0)
     near(f:snapshot(1).enemies[MINO.key].hp, 45000, 1e-9, "a full HP that is not a number: the HP alone")
-    near(f:snapshot(1).enemies[MINO.key].max_hp, 56000, 1e-9, "the full HP kept")
+    near(f:snapshot(1).enemies[MINO.key].max_hp, 55000, 1e-9, "the full HP kept")
     -- a killed enemy keeps its 0 and its kill
     f:add_hit(hit(P0, MINO, { hp0 = 45000, hp1 = 0 }))
-    eq(f:note_hp(MINO.key, 120, 56000), nil, "killed: nothing")
+    eq(f:note_hp(MINO.key, 120, 55000), nil, "killed: nothing")
     local k = f:snapshot(1).enemies[MINO.key]
     near(k.hp, 0, 1e-9, "0"); eq(k.killed, true, "killed"); eq(k.killer, P0.key, "by the pawn")
 end)
@@ -707,6 +724,7 @@ test("note_hp: a linked body or a returning enemy's new object gives its HP to t
     local key = f:note_hp(EYE_B.key, 640000, 650000)
     eq(key, EYE_A.key, "the kept body's key")
     near(f:snapshot(1).enemies[EYE_A.key].hp, 640000, 1e-9, "the pool's HP")
+    eq(f.enemies[EYE_A.key].hit_hp, 649000, "its hit's HP stays")
     eq(f:snapshot(1).enemies[EYE_B.key], nil, "the other body stays no enemy")
     local DEMON = actor("a84752", "Lesser demon", "enemy", "ch255000_00", 260000)
     local DEMON2 = actor("a43200", "Lesser demon", "enemy", "ch255000_00", 260000)
