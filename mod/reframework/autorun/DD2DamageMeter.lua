@@ -237,6 +237,7 @@ local RETURN_WINDOW = 30         -- seconds after a kept fight ended in which a 
 local RETURN_HP_BELOW = 0.02     -- how far below the HP it was left with a returning enemy may come back, and
 local RETURN_HP_ABOVE = 0.001    -- how far above (at least 1 HP), each a share of its max HP
 local RETURN_KEEP = 1000         -- the most hits and heals a new fight keeps while it may still continue one
+local FULL_TOLD_MAX = 256        -- enemies kept as told by tell_full; past it the list starts afresh
 local STAT_EVERY = 2             -- seconds between two snapshots of the hidden-stats evidence
 local STAT_AFTER_PAUSE = 1       -- seconds after a pause's end before its snapshot (none in between)
 local SCENE_TYPE, SCENE_METHOD = "app.GuiManager", "OnChangeSceneType"  -- by name: its parameters are not read
@@ -358,12 +359,14 @@ end
 S.hidden_cost = hidden_cost()
 -- With `debug` on, the screens whose fallen-back anchor debug.log has told in this game session (tell_anchor).
 S.anchor_told = S.anchor_told or {}
--- HiddenScreens.gone() and .invalid() as debug.log last told them (note_gone).
-S.hidden_gone = S.hidden_gone or HiddenScreens.gone()
-S.hidden_invalid = S.hidden_invalid or HiddenScreens.invalid()
--- gauges.gone() and .invalid() as debug.log last told them (note_bars_gone).
-S.bars_gone = S.bars_gone or gauges.gone()
-S.bars_invalid = S.bars_invalid or gauges.invalid()
+-- HiddenScreens.gone() and .invalid() as debug.log last told them (note_gone), and gauges.gone() and .invalid()
+-- (note_bars_gone). Taken anew at each load: a load that loads those modules anew starts their counts at 0 (an old
+-- baseline would give a negative count, or hide the drops until the counts caught up with it), and a load that keeps
+-- them has nothing untold (each frame tells what it dropped).
+S.hidden_gone, S.hidden_invalid = HiddenScreens.gone(), HiddenScreens.invalid()
+S.bars_gone, S.bars_invalid = gauges.gone(), gauges.invalid()
+-- With `debug` on, the enemies (keys) whose bar tell_full told, and how many.
+S.full_told, S.full_told_n = S.full_told or {}, S.full_told_n or 0
 -- With `debug` on, the debug collector's meets and the hidden-stats evidence's snapshots, and their time, since they
 -- were last logged (log_collect_cost).
 local function collect_cost()
@@ -904,6 +907,7 @@ local function reset_world()
     forget_hidden()
     -- a loaded save's equipment is no change of the player's (the hidden-stats evidence)
     Collector.stat_forget()
+    S.full_told, S.full_told_n = {}, 0
     S.refresh_due = true
 end
 
@@ -967,14 +971,16 @@ local function world_frame(t)
 end
 
 -- A hidden-stats screen kept that the game destroyed under the mod is one debug.log line, with the frame, told apart
--- by how it was caught: its get_Valid gave false (HiddenScreens.invalid): "hidden screens: a kept screen no longer
--- valid at frame N: dropped"; its get_Valid or get_DrawSelf raised (the last guard, HiddenScreens.gone): "hidden
--- screens: a kept screen raised at frame N (the game destroyed it): dropped". Two numbers compared a frame.
+-- by how it was caught: its get_Valid gave false (HiddenScreens.invalid), with how many in that frame as the bars'
+-- line: "hidden screens: N kept no longer valid at frame F: dropped"; its get_Valid or get_DrawSelf raised (the last
+-- guard, HiddenScreens.gone): "hidden screens: a kept screen raised at frame N (the game destroyed it): dropped". Two
+-- numbers compared a frame.
 local function note_gone()
     local invalid = HiddenScreens.invalid()
     if invalid ~= S.hidden_invalid then
+        log_line(string.format("hidden screens: %d kept no longer valid at frame %d: dropped",
+            invalid - S.hidden_invalid, S.frame))
         S.hidden_invalid = invalid
-        log_line(string.format("hidden screens: a kept screen no longer valid at frame %d: dropped", S.frame))
     end
     local n = HiddenScreens.gone()
     if n == S.hidden_gone then return end
@@ -1231,23 +1237,45 @@ local function boss_bar_frame(bar)
     if err then Hook.fail("boss bar", err) end
 end
 
+-- With `debug` on, the first time the bar over an enemy of the open fight is left out for its full HP alone
+-- (Fight:note_hp's `refused`), one debug.log line with both full HPs, so that an in-game check tells why: another
+-- character at a reused address, an HP above the full one (actors.health then gives that HP as the full one), a full
+-- HP that changed since the Actor was made, a linked body of another full HP. One line an enemy key since the world
+-- was new (S.full_told; past FULL_TOLD_MAX keys the list starts afresh).
+local function tell_full(refused, full)
+    if not settings.values.debug then return end
+    local told = S.full_told
+    if told[refused.key] then return end
+    if S.full_told_n >= FULL_TOLD_MAX then
+        told = {}
+        S.full_told, S.full_told_n = told, 0
+    end
+    told[refused.key], S.full_told_n = true, S.full_told_n + 1
+    log_line(string.format("enemy line: the bar over %s (%s) left out at frame %d: its full HP %.2f, the fight's %.2f",
+        tostring(refused.name), tostring(refused.key), S.frame, full, refused.max_hp))
+end
+
 -- The HP the HP numbers read this frame (bar.hp, bar.full of the bars over heads, then of the boss bar; a bar without
 -- them was not read) goes to the open fight's enemy under the bar (Fight:note_hp), and to the live window's enemy line
 -- when it is about that enemy: that line is built every LIVE_EVERY s from the HP the counted hits left, and so lagged
 -- the numbers by a hit or by HP the game took away outside them. No game call of its own: the bar's character is
 -- matched to the Actor the hits made by its address (actors.cached), and a bar whose full HP is not the full HP the
 -- fight's Actor of that enemy has is another character at a reused address: Fight:note_hp leaves it out (checked
--- there, on the fight's own Actor: the enemy plate's actors.of may have cached the newcomer under the same key). An
--- HP of 0 or less is left out too (a kill is a counted hit's), and the HP a returning enemy is matched against stays
--- the counted hits' (returnable).
+-- there, on the fight's own Actor: the enemy plate's actors.of may have cached the newcomer under the same key; with
+-- `debug` on, tell_full says so once an enemy). An HP of 0 or less is left out too (a kill is a counted hit's), and
+-- the HP a returning enemy is matched against stays the counted hits' (returnable).
 local function meter_hp(bars, boss)
     local fight = S.fight
     local header = S.live_model and S.live_model.header
     local function take(bar)
         local actor = bar.hp ~= nil and actors.cached(bar.character) or nil
         if actor == nil then return end
-        local key, e = fight:note_hp(actor.key, bar.hp, bar.full)
-        if e ~= nil and header ~= nil and header.key == key then header.hp_text = View.header_hp(e, i18n) end
+        local key, got = fight:note_hp(actor.key, bar.hp, bar.full)
+        if key == nil then
+            if got ~= nil then tell_full(got, bar.full) end
+        elseif header ~= nil and header.key == key then
+            header.hp_text = View.header_hp(got, i18n)
+        end
     end
     for _, bar in ipairs(bars or {}) do take(bar) end
     if boss then take(boss) end

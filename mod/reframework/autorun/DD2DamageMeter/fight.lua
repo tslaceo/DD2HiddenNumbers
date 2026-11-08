@@ -48,8 +48,9 @@
 --   fight:reopen(t)   the finished fight goes on from t: t1 and outcome forgotten, t - t1 added to its pause
 --   fight:alias(key, to_key)   character `key` counts as the fight's enemy `to_key` from now on (none when to_key
 --          is no enemy of the fight); fight.aliases[key] -> that enemy's Actor
---   fight:note_hp(key, hp, full) -> enemy key, its entry | nil   the HP character `key` has now as the game shows it
---          (read outside the hits): the fight's enemy it counts as takes it as its HP left (see the function)
+--   fight:note_hp(key, hp, full) -> enemy key, its entry | nil[, refused]   the HP character `key` has now as the game
+--          shows it (read outside the hits): the fight's enemy it counts as takes it as its HP left; refused =
+--          { key, name, max_hp } when only `full` kept it out (see the function)
 --   fight.enemies[key].hit_hp: the HP the last counted hit on that enemy left (nil before one; note_hp never sets
 --          it), what a returning enemy is matched against (DD2DamageMeter.lua); not in a snapshot
 --   fight:held(), fight:snapshot(now, full) -> { t0, t1, outcome, duration, paused, actors, enemies, types, detail }
@@ -579,8 +580,9 @@ end
 --   - a `full` that differs from the full HP its Actor has (when that is known, above 0): another character than the
 --     one the fight met (an address the game gave anew); a `full` that is no finite number is not compared.
 -- Only `hp`: the HP its last counted hit left (hit_hp, what a returning enemy is matched against) stays as it was.
--- Gives that enemy's key and its entry (the fight's own table, to read: max_hp, hp, killed), nil when nothing was
--- taken.
+-- Gives that enemy's key and its entry (the fight's own table, to read: max_hp, hp, killed); nil when nothing was
+-- taken, and then, when it was left out for its `full` alone, a second value { key, name, max_hp }: that enemy's key,
+-- its Actor's name and full HP (for debug.log: such a refusal is told apart from the others).
 function Fight:note_hp(key, hp, full)
     if not (finite(hp) and hp > 0) then return nil end
     local to = kept_as(self, key)
@@ -588,7 +590,9 @@ function Fight:note_hp(key, hp, full)
     local e = self.enemies[key]
     if e == nil or e.killed then return nil end
     local known = e.actor.max_hp
-    if finite(full) and finite(known) and known > 0 and full ~= known then return nil end
+    if finite(full) and finite(known) and known > 0 and full ~= known then
+        return nil, { key = key, name = e.actor.name, max_hp = known }
+    end
     e.hp = hp
     if finite(full) and full > e.max_hp then e.max_hp = full end
     return key, e

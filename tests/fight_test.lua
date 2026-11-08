@@ -425,6 +425,7 @@ test("linked bodies: the hidden body's held hits are counted on the link, its he
     eq(snap.actors[EYE_B.key], nil, "no entry for B")
     near(snap.actors[EYE_A.key].taken, 1500, 1e-9, "the pawn's 800 and the ally's 700")
     eq(snap.enemies[EYE_A.key].hp, 648500, "the pool's HP stays the lowest, the held hit's is older")
+    eq(f.enemies[EYE_A.key].hit_hp, 648500, "and so does the HP its hits left (a returning enemy's match)")
     near(snap.actors[ALLY.key].dealt, 700, 1e-9, "the ally's damage")
     near(snap.actors[EYE_A.key].heal_received, 80, 1e-9, "both heals on A")
     eq(snap.detail.heals[P2.key][EYE_B.key], nil, "the detail's heals name A only")

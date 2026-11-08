@@ -2167,6 +2167,43 @@ test("no continuation when the hit is late, another kind, another HP, the enemy 
     separate("an untouched demon, its boss bar seen", fresh_demon, fight_a, setup)
 end)
 
+test("a returning enemy is matched by the HP its hits left, not by the HP its bar showed after them", function()
+    -- fight A: the player takes the demon down to 22 612; then, under its bar over its head, it loses HP the hits do
+    -- not see and its numbers read 16 000 (6 612 lower, past the 2 %); the fight ends at 103.1. Gives the mod.
+    local function fight_a()
+        world({ settings = { debug = true } })
+        bars_scene()
+        local d = demon()
+        gauge(d)
+        local M = load()
+        frame()
+        W.mode = 2
+        frame_at(50)
+        hit(W.player, d, 237388, 22612)
+        d.hp = 16000
+        frame_at(51)
+        eq(M.state.fight:snapshot(51).enemies[mod("game/actors").of(d).key].hp, 16000, "the fight took the bar's HP")
+        W.mode, W.ending = 0, true
+        frame_at(100)
+        frame_at(103.1)
+        W.ending = false
+        return M
+    end
+    -- back at the hit's HP: the fight goes on
+    local M = fight_a()
+    frame_at(115)
+    hit(W.player, demon(22612), 1000, 21612)
+    eq(M.state.fight:snapshot(M.state.t).t0, 50, "back at 22 612: fight A goes on")
+    eq(lines_with(R.files[LOG_FILE], "fight continued"), 1, "its debug line")
+    -- back at the bar's HP alone: a fight of its own
+    M = fight_a()
+    frame_at(115)
+    hit(W.player, demon(16000), 1000, 15000)
+    eq(M.state.fight:snapshot(M.state.t).t0, 115, "back at 16 000: a new fight")
+    eq(lines_with(R.files[LOG_FILE], "fight continued"), 0, "no debug line")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
 test("the demon's real numbers: left at 22 612, back at 21 504.8 (0.43 % lower), it continues the fight",
     function()
     world({ settings = { debug = true } })
@@ -3760,6 +3797,17 @@ test("the meter's enemy line: a bar over another character at a reused address, 
     eq(ui.has_text("3 043 / 3 700"), true, "the line still the goblin's")
     local e = M.state.fight:snapshot(M.state.t).enemies[key]
     near(e.hp, 3043.035, 1e-6, "the goblin's HP untouched"); eq(e.max_hp, 3700, "its full HP too")
+    -- debug off: nothing told; on: one debug.log line for the enemy, with both full HPs, the first time only
+    eq(R.files[LOG_FILE], nil, "no debug.log")
+    M.state.settings:set("debug", true)
+    frame()
+    local told = string.format("enemy line: the bar over Goblin (%s) left out at frame %d: its full HP 9000.00, "
+        .. "the fight's 3700.00", key, M.state.frame)
+    eq(lines_with(R.files[LOG_FILE], told), 1, "told: " .. tostring(R.files[LOG_FILE]))
+    frame()
+    frame(0.2)
+    eq(lines_with(R.files[LOG_FILE], "enemy line:"), 1, "once")
+    M.state.settings:set("debug", false)
     -- the goblin back under the bar at 0 HP (something the hits do not see): no kill, its HP stays
     g.comp.fields.CompChara = W.goblin
     W.goblin.hp = 0
@@ -7481,7 +7529,7 @@ test("with debug on, debug.log tells a screen or bar kept that get_Valid dropped
     table.remove(W.guis)
     local screen_draws = draws(screen.go)
     frame()
-    eq(lines_with(log(), "hidden screens: a kept screen no longer valid at frame 2: dropped"), 1, "the screen")
+    eq(lines_with(log(), "hidden screens: 1 kept no longer valid at frame 2: dropped"), 1, "the screen, counted")
     eq(draws(screen.go), screen_draws, "its get_DrawSelf not called")
     frame()
     eq(lines_with(log(), "hidden screens:"), 1, "once")
@@ -7501,6 +7549,42 @@ test("with debug on, debug.log tells a screen or bar kept that get_Valid dropped
     eq(lines_with(log(), "game bars:"), 2, "told apart")
     eq(lines_with(log(), "kept raised"), 1, "the bar no longer valid not told as raised")
     eq(lines_with(log(), "kept screen raised"), 0, "nor the screen")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
+test("with debug on, a load that loads the modules anew counts their drops from 0: never a negative count", function()
+    world({ settings = { debug = true } })
+    bars_scene()
+    R.method("via.GameObject", "get_Valid", function(go) return go.valid ~= false end)
+    load()
+    local function log() return R.files[LOG_FILE] or "" end
+    local a = gauge(W.goblin)
+    local b = gauge(char("ch220003_00_16", { hostile = true, hp = 500, max_hp = 1000 }), { x = 300 })
+    local screen = item_gui()
+    frame()
+    -- two bars and a screen dropped as no longer valid
+    a.go.valid, b.go.valid, screen.go.valid = false, false, false
+    W.guis = {}
+    frame()
+    eq(lines_with(log(), "game bars: 2 kept no longer valid at frame 2: dropped"), 1, "the two bars")
+    eq(lines_with(log(), "hidden screens: 1 kept no longer valid at frame 2: dropped"), 1, "the screen")
+    -- the mod's modules loaded anew, its state kept: their counts start at 0
+    for name in pairs(package.loaded) do
+        if name:find("^DD2DamageMeter/") then package.loaded[name] = nil end
+    end
+    local M = load()
+    eq(M.state.loads, 2, "the second load, the same state")
+    local c = gauge(char("ch220003_00_17", { hostile = true, hp = 400, max_hp = 1000 }), { x = 500 })
+    local screen2 = item_gui()
+    frame(1)
+    eq(mod("game/gauges").count(), 1, "the new bar kept")
+    eq(mod("game/hidden_screens").kept(), 1, "the new screen kept")
+    c.go.valid, screen2.go.valid = false, false
+    W.guis = {}
+    frame()
+    eq(lines_with(log(), "game bars: 1 kept no longer valid at frame 4: dropped"), 1, "the bar after the load, counted")
+    eq(lines_with(log(), "hidden screens: 1 kept no longer valid at frame 4: dropped"), 1, "the screen too")
+    eq(lines_with(log(), ": -"), 0, "no negative count")
     eq(M.info().errors, 0, "no error caught")
 end)
 
