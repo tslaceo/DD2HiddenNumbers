@@ -479,12 +479,71 @@ test("Кольцо спокойствия (8600) has two total lines, each under
     I18n.set("ru")
     local calm = ring_raw({ fields = { PhysicalDefence = 10, MagicDefence = 10 } })
     eq(texts(Model.panel(Data.ring(8600), calm, nil, on(1645, 1494.94))),
-        "plain:+10 к физ. защите | plain:защита 1635 → 1645 (+1%) | plain:до -1% физ. урона по тебе"
-        .. " | plain:+10 к маг. защите | plain:маг. защита 1484 → 1494 (+1%) | plain:до -1% маг. урона по тебе",
+        "plain:+10 к физ. защите | plain:защита 1635 → 1645 (+0,6%) | plain:до -0,6% физ. урона по тебе"
+        .. " | plain:+10 к маг. защите | plain:маг. защита 1484 → 1494 (+0,7%) | plain:до -0,7% маг. урона по тебе",
         "equipped")
     eq(texts(Model.panel(Data.ring(8600), calm, nil, off(1645, nil))),
-        "plain:+10 к физ. защите | plain:защита 1645 → 1655 (+1%) | plain:до -1% физ. урона по тебе"
+        "plain:+10 к физ. защите | plain:защита 1645 → 1655 (+0,6%) | plain:до -0,6% физ. урона по тебе"
         .. " | plain:+10 к маг. защите", "the magick total unread: its line only")
+    I18n.set("ru")
+end)
+
+test("a percent below 1 on the total and damage lines has a decimal: a small bonus on a big total is not 0", function()
+    I18n.set("ru")
+    -- Кольцо спокойствия's +10 on 2000: 0,5 % and 1 − 2000 / 2010 = 0,4975 %, each 0 when whole
+    local calm = ring_raw({ fields = { PhysicalDefence = 10, MagicDefence = 10 } })
+    eq(texts(Model.panel(Data.ring(8600), calm, nil, on(2010, 2010))),
+        "plain:+10 к физ. защите | plain:защита 2000 → 2010 (+0,5%) | plain:до -0,5% физ. урона по тебе"
+        .. " | plain:+10 к маг. защите | plain:маг. защита 2000 → 2010 (+0,5%) | plain:до -0,5% маг. урона по тебе",
+        "equipped")
+    eq(texts(Model.panel(Data.ring(8600), calm, nil, off(2000, nil, "pawn"))),
+        "plain:+10 к физ. защите | plain:защита 2000 → 2010 (+0,5%) | plain:до -0,5% физ. урона по пешке"
+        .. " | plain:+10 к маг. защите", "not equipped, the pawn")
+    -- 0,97 % and 0,96 % come to 1,0: shown as 1, as a whole percent is
+    local p = Model.panel(Data.ring(8600), calm, nil, off(1030, nil))
+    eq(p.lines[2].text, "защита 1030 → 1040 (+1%)", "0,97 %: 1, not 1,0")
+    eq(p.lines[3].text, "до -1% физ. урона по тебе", "0,96 %: 1, not 1,0")
+    -- each percent on its own: 0,957 % comes to 1, 0,948 % to 0,9
+    p = Model.panel(Data.ring(8600), calm, nil, off(1045, nil))
+    eq(p.lines[2].text, "защита 1045 → 1055 (+1%)", "0,957 %: 1")
+    eq(p.lines[3].text, "до -0,9% физ. урона по тебе", "0,948 %: 0,9")
+    -- from 1 up, whole as before: 1,43 % and 1,41 % are 1
+    p = Model.panel(Data.ring(8600), calm, nil, off(700, nil))
+    eq(p.lines[2].text, "защита 700 → 710 (+1%)", "1,43 %: whole")
+    eq(p.lines[3].text, "до -1% физ. урона по тебе", "1,41 %: whole")
+    -- below a twentieth it is 0 as before, with no sign: +1 on 3000 is 0,033 %
+    eq(texts(Model.panel(Data.ring(3509), ring_raw({ fields = { PhysicalDefence = 1 } }), nil, off(3000, nil))),
+        "plain:+1 к физ. защите | plain:защита 3000 → 3001 (0%) | plain:до 0% физ. урона по тебе", "0,033 %: 0")
+    I18n.set("en")
+    p = Model.panel(Data.ring(8600), calm, nil, on(2010, 2010))
+    eq(p.lines[2].text, "defense 2000 → 2010 (+0.5%)", "en")
+    eq(p.lines[3].text, "up to -0.5% physical damage taken", "en damage")
+    eq(p.lines[5].text, "magick defense 2000 → 2010 (+0.5%)", "en magick")
+    eq(p.lines[6].text, "up to -0.5% magick damage taken", "en magick damage")
+    eq(Model.panel(Data.ring(8600), calm, nil, on(2010, 2010, "pawn")).lines[3].text,
+        "up to -0.5% physical damage the pawn takes", "en pawn")
+    p = Model.panel(Data.ring(8600), calm, nil, off(1030, nil))
+    eq(p.lines[2].text, "defense 1030 → 1040 (+1%)", "en 0.97 %: 1, not 1.0")
+    eq(p.lines[3].text, "up to -1% physical damage taken", "en 0.96 %: 1, not 1.0")
+    I18n.set("ru")
+end)
+
+test("a bonus below 0 (no line in the data has one) is rounded the same way, by its size, with its sign", function()
+    I18n.set("ru")
+    local e = { lines = { { mark = "plain", ru = "{1} к физ. защите", en = "{1} defense",
+                            nums = { { src = "fields.PhysicalDefence", as = "signed" } }, total = "phys",
+                            total_add = "fields.PhysicalDefence" } } }
+    local minus = ring_raw({ fields = { PhysicalDefence = -10 } })
+    -- 2000 → 1990: −0,5 % and 1 − 2000 / 1990 = −0,5025 %: the damage taken goes up
+    eq(texts(Model.panel(e, minus, nil, off(2000, nil))),
+        "plain:-10 к физ. защите | plain:защита 2000 → 1990 (-0,5%) | plain:до +0,5% физ. урона по тебе", "ru")
+    -- 2000 → 1975: −1,25 % and −1,27 %, from 1 up in size: whole
+    eq(texts(Model.panel(e, ring_raw({ fields = { PhysicalDefence = -25 } }), nil, off(2000, nil))),
+        "plain:-25 к физ. защите | plain:защита 2000 → 1975 (-1%) | plain:до +1% физ. урона по тебе",
+        "from 1 up: whole")
+    I18n.set("en")
+    eq(Model.panel(e, minus, nil, off(2000, nil)).lines[2].text, "defense 2000 → 1990 (-0.5%)", "en")
+    eq(Model.panel(e, minus, nil, off(2000, nil)).lines[3].text, "up to +0.5% physical damage taken", "en damage")
     I18n.set("ru")
 end)
 

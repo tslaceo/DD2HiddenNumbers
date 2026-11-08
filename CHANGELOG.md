@@ -11,7 +11,9 @@
   stats can't be read.
 - Hidden stats: the line under a defense total now reads "up to -10% physical damage taken" instead of "≈ -10%
   physical damage taken": the number is the most the extra defense can cut, and its ≈ looked like the legend's "not
-  confirmed by other mods". Mettle, Apotropaism and the defense rings no longer end with the grey legend line.
+  confirmed by other mods". Mettle, Apotropaism and the defense rings no longer end with the grey legend line. Below
+  1%, the percent on the defense total and on the damage line under it now has one decimal: Ring of Assurance's +10
+  shows, for example, "(+0.6%)" and "up to -0.6% physical damage taken" instead of a rounded 0% or 1%.
 - Fewer "Internal game exception ... get_DrawSelf" lines in REFramework's log: the mod now checks whether a closed
   menu or a vanished health bar is still there before it reads it.
 

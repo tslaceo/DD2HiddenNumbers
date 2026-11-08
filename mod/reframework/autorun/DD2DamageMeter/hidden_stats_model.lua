@@ -37,16 +37,16 @@
 --     on a pawn's base (base.who "pawn") has neither: no ending, and "the".
 --   - A line with a total that is written is followed by its total line, with the line's mark: «защита 1486 →
 --     1645 (+11%)» (hs_total_phys / hs_total_magic), before → after, each floored as the status screen floors it
---     (not grouped), then (after / before − 1) × 100 whole, with its sign. The bonus is the line's personal number,
---     else total_add's value (a ring's field); equipped: before = total − bonus, after = total; not: before =
---     total, after = total + bonus. Left out when the total, the bonus or whether it is equipped is unknown, or when
---     before or after is not above 0: never guessed.
+--     (not grouped), then (after / before − 1) × 100 with its sign, whole, or to one decimal below 1 in size
+--     («+0,5%»). The bonus is the line's personal number, else total_add's value (a ring's field); equipped: before =
+--     total − bonus, after = total; not: before = total, after = total + bonus. Left out when the total, the bonus or
+--     whether it is equipped is unknown, or when before or after is not above 0: never guessed.
 --   - Under a total line, the most damage taken it can cut, with the line's mark as the total line has it: «до -10%
 --     физ. урона по тебе» (hs_damage_<phys|magic>_<yours|pawns> by total.who), −round((1 − before / after) × 100)
---     with its sign. "Up to" («до»): the game's step is damage × C / (C + D), D the total defence, C about 113
---     against the enemy measured (its attack, probably), and this is its C-free form, the cut's upper bound: for
---     Стойкость's −10 % the real cut is 7 to 10 %, by the enemy. Left out with the total line, and when who is not
---     known.
+--     with its sign, the cut rounded as the total line's percent: whole, or to one decimal below 1 in size
+--     («до -0,5%»). "Up to" («до»): the game's step is damage × C / (C + D), D the total defence, C about 113 against
+--     the enemy measured (its attack, probably), and this is its C-free form, the cut's upper bound: for Стойкость's
+--     −10 % the real cut is 7 to 10 %, by the enemy. Left out with the total line, and when who is not known.
 local I18n = require("DD2DamageMeter/i18n")
 
 local HiddenStatsModel = {}
@@ -117,6 +117,14 @@ local function floored(x) return math.floor(x + 0.001) end
 -- A whole number to the nearest, half up.
 local function rounded(x) return math.floor(x + 0.5) end
 
+-- A percent of the total and damage lines: whole, or to one decimal below 1 in size (its size rounded half up, its
+-- sign kept), so that a small bonus on a big total is not shown as 0: 0.48 -> 0.5, 0.97 -> 1, 0.03 -> 0.
+local function percent(x)
+    if math.abs(x) >= 1 then return rounded(x) end
+    local tenths = math.floor(math.abs(x) * 10 + 0.5)
+    return (x < 0 and -tenths or tenths) / 10
+end
+
 -- The personal number of a line with a base, the base and whose (WHO's); nil when it cannot be made.
 local function personal(line, raw, base)
     if type(base) ~= "table" then return nil end
@@ -153,10 +161,10 @@ local function total_lines(line, raw, bonus, total)
     if total.equipped then before, after = now - bonus, now end
     if not (before > 0 and after > 0) then return nil, nil end
     local function shown(x) return string.format("%.0f", floored(x)) end
-    local text = I18n.t(key, shown(before), shown(after), signed(I18n.dec(rounded((after / before - 1) * 100))) .. "%")
+    local text = I18n.t(key, shown(before), shown(after), signed(I18n.dec(percent((after / before - 1) * 100))) .. "%")
     local who = WHO[total.who]
     if who == nil then return text, nil end
-    local cut = rounded((1 - before / after) * 100)
+    local cut = percent((1 - before / after) * 100)
     return text, I18n.t("hs_damage_" .. line.total .. "_" .. who.damage, signed(I18n.dec(-cut)) .. "%")
 end
 
