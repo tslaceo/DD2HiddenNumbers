@@ -652,6 +652,72 @@ test("enemy HP: max from the actor or from the first hp0, latest hp", function()
     eq(e[GOB2.key].killed, false, "alive")
 end)
 
+test("note_hp: an enemy of the fight takes the HP the game shows now, read outside the hits", function()
+    local f = Fight.new(0)
+    f:add_hit(hit(PL, MINO, { hp0 = 55000, hp1 = 50000 }))
+    local key, e = f:note_hp(MINO.key, 47681.5, 55000)
+    eq(key, MINO.key, "its key"); eq(e, f.enemies[MINO.key], "its entry")
+    near(f:snapshot(1).enemies[MINO.key].hp, 47681.5, 1e-9, "the HP shown")
+    -- HP up again (a heal the hits never see): taken too; a full HP above the known one raises it
+    f:note_hp(MINO.key, 48000, 56000)
+    local m = f:snapshot(1).enemies[MINO.key]
+    near(m.hp, 48000, 1e-9, "up"); near(m.max_hp, 56000, 1e-9, "full HP raised")
+    f:note_hp(MINO.key, 47000, 50000)
+    near(f:snapshot(1).enemies[MINO.key].max_hp, 56000, 1e-9, "never lowered")
+    near(f:snapshot(1).enemies[MINO.key].hp, 47000, 1e-9, "the HP")
+    -- the next hit's HP after it, as before
+    f:add_hit(hit(PL, MINO, { hp0 = 47000, hp1 = 46000 }))
+    near(f:snapshot(1).enemies[MINO.key].hp, 46000, 1e-9, "a hit sets it")
+    -- an enemy that only hit the party: its HP is known from now on
+    f:add_hit(hit(GOB, PL, { hp0 = 2400, hp1 = 2300 }))
+    eq(f:snapshot(1).enemies[GOB.key].hp, nil, "not known")
+    f:note_hp(GOB.key, 3100, 3700)
+    near(f:snapshot(1).enemies[GOB.key].hp, 3100, 1e-9, "known")
+    -- below 0 is 0
+    f:note_hp(GOB.key, -5, 3700)
+    near(f:snapshot(1).enemies[GOB.key].hp, 0, 1e-9, "0")
+    -- nothing for a character that is no enemy of the fight, a party member, an HP that is not a number
+    eq(f:note_hp(GOB2.key, 100, 500), nil, "no enemy of the fight")
+    eq(f:snapshot(1).enemies[GOB2.key], nil, "none made")
+    eq(f:note_hp(PL.key, 100, 2400), nil, "the player")
+    for _, bad in ipairs({ 0 / 0, math.huge, "5" }) do
+        eq(f:note_hp(MINO.key, bad, 56000), nil, "HP " .. tostring(bad))
+    end
+    eq(f:note_hp(MINO.key, nil, 56000), nil, "no HP")
+    near(f:snapshot(1).enemies[MINO.key].hp, 46000, 1e-9, "kept")
+    f:note_hp(MINO.key, 45000, 0 / 0)
+    near(f:snapshot(1).enemies[MINO.key].hp, 45000, 1e-9, "a full HP that is not a number: the HP alone")
+    near(f:snapshot(1).enemies[MINO.key].max_hp, 56000, 1e-9, "the full HP kept")
+    -- a killed enemy keeps its 0 and its kill
+    f:add_hit(hit(P0, MINO, { hp0 = 45000, hp1 = 0 }))
+    eq(f:note_hp(MINO.key, 120, 56000), nil, "killed: nothing")
+    local k = f:snapshot(1).enemies[MINO.key]
+    near(k.hp, 0, 1e-9, "0"); eq(k.killed, true, "killed"); eq(k.killer, P0.key, "by the pawn")
+end)
+
+test("note_hp: a linked body or a returning enemy's new object gives its HP to the enemy it counts as", function()
+    local EYE_A = { key = "a301", name = "ch270000_00", kind = "enemy", base_id = "ch270000_00", chara_id = 469873306,
+                    max_hp = 650000 }
+    local EYE_B = { key = "a302", name = "ch270000_00", kind = "enemy", base_id = "ch270000_00", chara_id = 469873306,
+                    max_hp = 650000 }
+    local f = Fight.new(0)
+    f:add_hit(hit(P0, EYE_A, { frame = 100, hp0 = 650000, hp1 = 649000, final = 1000 }))
+    f:add_hit({ t = 1, victim = EYE_B, skill = {}, final = 1000, hp0 = 650000, hp1 = 649000, mirror = true,
+                frame = 100 })
+    local key = f:note_hp(EYE_B.key, 640000, 650000)
+    eq(key, EYE_A.key, "the kept body's key")
+    near(f:snapshot(1).enemies[EYE_A.key].hp, 640000, 1e-9, "the pool's HP")
+    eq(f:snapshot(1).enemies[EYE_B.key], nil, "the other body stays no enemy")
+    local DEMON = actor("a84752", "Lesser demon", "enemy", "ch255000_00", 260000)
+    local DEMON2 = actor("a43200", "Lesser demon", "enemy", "ch255000_00", 260000)
+    f = Fight.new(0)
+    f:add_hit(hit(PL, DEMON, { hp0 = 260000, hp1 = 22612 }))
+    f:alias(DEMON2.key, DEMON.key)
+    eq(f:note_hp(DEMON2.key, 22000, 260000), DEMON.key, "the enemy it continues")
+    near(f:snapshot(1).enemies[DEMON.key].hp, 22000, 1e-9, "its HP")
+    eq(f:snapshot(1).enemies[DEMON2.key], nil, "no enemy of its own")
+end)
+
 test("an enemy that only hit the party or an ally is one of the fight's enemies", function()
     local f = Fight.new(0)
     f:add_hit(hit(GOB, PL, { hp0 = 2000, hp1 = 1900 }))

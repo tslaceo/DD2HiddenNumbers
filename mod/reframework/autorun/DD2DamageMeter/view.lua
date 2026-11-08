@@ -7,6 +7,11 @@
 -- that have them.
 --   View.live:    damage, taken, heal, allies, other
 --   View.summary: enemies, damage, allies, other, heal, armor
+-- The live window's header = { title, time, key, hp_text }: key is the actor key of the enemy it is about (nil without
+-- one), hp_text that enemy's View.header_hp.
+--   View.header_hp(e, i18n) -> "31 200 / 80 000" | nil   a snapshot's (or the fight's) enemy entry { max_hp, hp,
+--     killed }: its HP left (0 once killed, its full HP while not known) / its full HP; nil without a full HP
+--     (DD2DamageMeter.lua puts the HP its HP numbers read into the header between two builds of the live window)
 -- Shared with the journal (journal.lua):
 --   View.actor_name(actor, ctx) -> string
 --   View.own_name(key, i18n) -> string | nil   the name of a member's own source ("self:blood_pact", "self:self",
@@ -294,15 +299,22 @@ local function enemy_entries(snap)
     return list
 end
 
+-- "31 200 / 80 000": an enemy entry's HP left (0 once killed, its full HP while not known) and full HP; nil without a
+-- full HP.
+local function header_hp(e, i18n)
+    local max_hp = e.max_hp or 0
+    if max_hp <= 0 then return nil end
+    return i18n.num(e.killed and 0 or e.hp or max_hp) .. " / " .. i18n.num(max_hp)
+end
+View.header_hp = header_hp
+
 local function header_model(snap, duration, ctx)
     local i18n = ctx.i18n
     local main = enemy_entries(snap)[1]
     local header = { title = "", time = i18n.time(duration) }
     if main then
-        header.title = actor_name(main.actor, ctx)
-        if main.max_hp > 0 then
-            header.hp_text = i18n.num(main.killed and 0 or main.hp) .. " / " .. i18n.num(main.max_hp)
-        end
+        header.title, header.key = actor_name(main.actor, ctx), main.key
+        header.hp_text = header_hp(main, i18n)
     end
     return header
 end

@@ -83,7 +83,9 @@
 -- head, and right of the boss bar it draws at the top of the screen (game/gauges.lua), that character's HP as the
 -- meter reads it (game/actors.lua), drawn first in the frame on the background list, so that the meter and the
 -- settings window are in front; none while the journal is open. Each one off is neither read nor drawn, and a
--- setting switched off forgets the bars found.
+-- setting switched off forgets the bars found. The HP they read in a frame is also the open fight's enemy's under
+-- that bar (Fight:note_hp) and, when the live window's enemy line is about that enemy, that line's in the same frame
+-- (meter_hp); with both off the line goes by the counted hits alone, built every LIVE_EVERY s.
 -- The damage numbers (damage_numbers.lua, ui/damage_numbers.lua; the settings `damage_numbers`,
 -- `damage_numbers_style`, `damage_numbers_size`): each hit on an enemy that the open fight counts becomes the HP it
 -- counted, at the hit's point (read by game/hits.lua only while they are on, the journal is closed, the game is not
@@ -1186,6 +1188,24 @@ local function boss_bar_frame(bar)
     if err then Hook.fail("boss bar", err) end
 end
 
+-- The HP the HP numbers read this frame (bar.hp, bar.full of the bars over heads, then of the boss bar; a bar without
+-- them was not read) goes to the open fight's enemy under the bar (Fight:note_hp), and to the live window's enemy line
+-- when it is about that enemy: that line is built every LIVE_EVERY s from the HP the counted hits left, and so lagged
+-- the numbers by a hit or by HP the game took away outside them. No game call of its own: the bar's character is
+-- matched to the Actor the hits made by its address (actors.cached).
+local function meter_hp(bars, boss)
+    local fight = S.fight
+    local header = S.live_model and S.live_model.header
+    local function take(bar)
+        local actor = bar.hp ~= nil and actors.cached(bar.character) or nil
+        if actor == nil then return end
+        local key, e = fight:note_hp(actor.key, bar.hp, bar.full)
+        if e ~= nil and header ~= nil and header.key == key then header.hp_text = View.header_hp(e, i18n) end
+    end
+    for _, bar in ipairs(bars or {}) do take(bar) end
+    if boss then take(boss) end
+end
+
 -- The poise and the status buildup under the boss bar the game draws now (gauges.boss), read from its boss and its
 -- hit controller at most every Buildup.READ_EVERY s; a status in effect drains at the frame's t in between.
 local function buildup_frame(t, bar)
@@ -1813,6 +1833,10 @@ local function window_frame(t)
             local hud = v.player_numbers and read_gauge("player bars", gauges.player, t) or nil
             if over and bars then guard("enemy bars", enemy_bars_frame, bars) end
             if at_boss and boss then guard("boss bar", boss_bar_frame, boss) end
+            -- the HP those numbers read, to the open fight and the meter's enemy line (built below)
+            if S.fight ~= nil and ((over and bars) or (at_boss and boss)) then
+                guard("meter hp", meter_hp, over and bars or nil, at_boss and boss or nil)
+            end
             if buildup and boss then guard("buildup bars", buildup_frame, t, boss) end
             if hud then guard("player numbers", player_numbers_frame, hud) end
             if plate then guard("enemy plate", measured_plate_frame, t, bars, boss) end

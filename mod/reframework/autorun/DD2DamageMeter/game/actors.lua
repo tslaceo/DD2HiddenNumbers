@@ -404,6 +404,16 @@ function Actors.address(actor)
     return nil
 end
 
+-- The Actor Actors.of made for this character's address, nil when it made none (or the cache was reset since). No
+-- game call (the address is the object's own) and nothing made or re-read: for a character read this frame (the
+-- one under an HP bar) to be matched to the actors the hits met. Unlike Actors.of it does not check the address is
+-- still that character's (its GameObject name).
+function Actors.cached(character)
+    local addr = Safe.address(character)
+    local entry = addr ~= nil and cache[addr] or nil
+    return entry and entry.actor or nil
+end
+
 -- Current and full HP of any character (an enemy under its HP bar), read as the meter reads them: get_Hp, and
 -- get_OriginalMaxHp raised to the current HP when that is more (as a fight's record takes it). nil when either is
 -- not a finite number or the full HP is not above 0. Makes no actor and keeps nothing.

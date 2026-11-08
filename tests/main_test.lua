@@ -3594,6 +3594,96 @@ test("boss HP numbers right of the boss bar the game draws, with the meter's HP,
     eq(#M.info().enemy_bars_missing, 0, "no imgui call missing")
 end)
 
+-- The game calls made on `c` itself (its own methods, not its hit controller's or its GameObject's) so far.
+local function calls_on_char(c)
+    local n = 0
+    for _, call in ipairs(R.calls) do
+        if call.this == c then n = n + 1 end
+    end
+    return n
+end
+
+test("the meter's enemy line shows the HP the boss bar's numbers show, in the same frame, from their one read",
+        function()
+    -- seen in game: the meter's line said 151 551 while the boss bar and its numbers said 149 232
+    world({ settings = { enemy_hp_numbers = "off", enemy_plate = false, buildup_bars = false } })
+    bars_scene()
+    local M = load()
+    local drake = char("ch255000_00", { name = "Drake", hostile = true, hp = 160000, max_hp = 200000 })
+    boss_bar(drake)
+    W.mode = 2
+    frame()
+    hit(W.casca, drake, 8449, 151551)
+    frame(0.2)
+    eq(numbers(), "151 551 / 200 000 · 76%", "the boss bar's numbers")
+    eq(ui.has_text("151 551 / 200 000"), true, "the meter's line says the same")
+    -- a hit right after the live window's last build: both follow it in the next frame
+    hit(W.casca, drake, 2319, 149232)
+    frame()
+    eq(numbers(), "149 232 / 200 000 · 75%", "the numbers after the hit")
+    eq(ui.has_text("149 232 / 200 000"), true, "the meter's line in the same frame")
+    eq(ui.has_text("151 551 / 200 000"), false, "not the HP before the hit")
+    -- HP the game takes away outside the hits the mod sees: the line follows the bar all the same
+    drake.hp = 148000
+    frame()
+    eq(numbers(), "148 000 / 200 000 · 74%", "the numbers")
+    eq(ui.has_text("148 000 / 200 000"), true, "the meter's line in the same frame")
+    frame(0.2)
+    eq(ui.has_text("148 000 / 200 000"), true, "and after the live window's next build")
+    -- no game read of its own: the drake's HP is read once a frame, for the numbers
+    local before = calls_on_char(drake)
+    frame()
+    eq(calls_on_char(drake) - before, 2, "get_Hp and get_OriginalMaxHp, once each, by the numbers")
+    -- the fight keeps it: the summary's enemy row
+    end_battle()
+    local row = M.state.summary_model.enemies[1]
+    eq(row.label, "Drake", "the drake's row"); eq(row.hp_text, "148 000 / 200 000 HP", "its HP as the bar showed it")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
+test("the meter's enemy line and the numbers over heads: the enemy the line is about takes their HP", function()
+    world({ settings = { boss_hp_numbers = "off", enemy_plate = false, buildup_bars = false } })
+    bars_scene()
+    local M = load()
+    gauge(W.goblin)
+    W.mode = 2
+    frame()
+    strike()
+    frame(0.2)
+    eq(numbers(), "3 043 / 3 700 · 82%", "the goblin's numbers")
+    eq(ui.has_text("3 043 / 3 700"), true, "the meter's line says the same")
+    hit(W.casca, W.goblin, 500, 2543.035)
+    frame()
+    eq(numbers(), "2 543 / 3 700 · 69%", "after a hit")
+    eq(ui.has_text("2 543 / 3 700"), true, "the meter's line in the same frame")
+    W.goblin.hp = 2000
+    frame(0.2)
+    eq(ui.has_text("2 000 / 3 700"), true, "HP lost outside the hits")
+    -- an ogre with more HP heads the line: the goblin's numbers leave it alone, its own HP is the ogre's
+    local ogre = char("ch230001_00_1", { name = "Ogre", hostile = true, hp = 9000, max_hp = 9000 })
+    hit(W.casca, ogre, 1000, 8000)
+    frame(0.2)
+    eq(M.state.live_model.header.title, "Ogre", "the ogre heads the line")
+    eq(ui.has_text("8 000 / 9 000"), true, "with its HP")
+    W.goblin.hp = 1500
+    frame()
+    eq(numbers(), "1 500 / 3 700 · 41%", "the goblin's numbers")
+    eq(ui.has_text("8 000 / 9 000"), true, "the line still the ogre's")
+    -- the numbers over heads off: nothing read, the line goes by the hits as before
+    for _ = 1, 5 do window_click("dd2dm_sprev:enemy_hp_numbers") end
+    eq(M.state.settings.values.enemy_hp_numbers, "off", "off")
+    press(F8)
+    ui.drawing_ui = false
+    local before = calls_on_char(W.goblin)
+    W.goblin.hp = 1000
+    frame(0.2)
+    eq(calls_on_char(W.goblin), before, "nothing read of the goblin")
+    end_battle()
+    local rows = M.state.summary_model.enemies
+    eq(rows[2].hp_text, "1 500 / 3 700 HP", "the goblin's HP as its numbers last showed it")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
 test("boss HP numbers off, or the journal open: the boss bar is neither read nor drawn", function()
     -- the enemy plate, the buildup bars and the player's numbers off too: they read the game's bars for themselves
     world({ settings = { enemy_hp_numbers = "off", boss_hp_numbers = "off", enemy_plate = false,

@@ -592,6 +592,20 @@ test("header: on equal full HP the enemy the party hit last comes first, in the 
     end
 end)
 
+test("header: the key of the enemy it is about; View.header_hp makes its HP text from an enemy entry", function()
+    local g = goblin(1)
+    local snap = snapshot({ stats(g), stats(CHIMERA) }, {
+        enemies = { [g.key] = foe(g, { hp = 100 }), [CHIMERA.key] = foe(CHIMERA, { hp = 31200 }) },
+    })
+    local h = View.live(snap, 10, ctx()).header
+    eq(h.key, CHIMERA.key, "the chimera's key"); eq(h.hp_text, "31 200 / 80 000", "its HP")
+    eq(View.header_hp({ max_hp = 80000, hp = 29999.6, killed = false }, i18n), "30 000 / 80 000", "current / full")
+    eq(View.header_hp({ max_hp = 80000, hp = 12.4, killed = true }, i18n), "0 / 80 000", "0 once killed")
+    eq(View.header_hp({ max_hp = 80000, killed = false }, i18n), "80 000 / 80 000", "no HP known: full")
+    eq(View.header_hp({ max_hp = 0, hp = 10, killed = false }, i18n), nil, "no full HP: none")
+    eq(View.live(snapshot({ stats(GUTS) }), 5, ctx()).header.key, nil, "no enemy: no key")
+end)
+
 test("header: an enemy entry without the time of a hit counts as never hit", function()
     local a, b = goblin(1), goblin(2)
     local snap = snapshot({ stats(a, { taken = 900 }), stats(b, { taken = 100 }) }, {

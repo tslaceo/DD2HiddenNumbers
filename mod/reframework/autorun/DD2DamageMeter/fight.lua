@@ -48,9 +48,12 @@
 --   fight:reopen(t)   the finished fight goes on from t: t1 and outcome forgotten, t - t1 added to its pause
 --   fight:alias(key, to_key)   character `key` counts as the fight's enemy `to_key` from now on (none when to_key
 --          is no enemy of the fight); fight.aliases[key] -> that enemy's Actor
+--   fight:note_hp(key, hp, full) -> enemy key, its entry | nil   the HP character `key` has now as the game shows it
+--          (read outside the hits): the fight's enemy it counts as takes it as its HP left (see the function)
 --   fight:held(), fight:snapshot(now, full) -> { t0, t1, outcome, duration, paused, actors, enemies, types, detail }
 --     duration = (t1 or now) - t0 - paused; paused: the seconds it stood still (reopen), nil when none
---     enemies[key] = { actor, max_hp, hp, killed, killed_at = seconds since t0, without the pause | nil,
+--     enemies[key] = { actor, max_hp, hp (the HP left after the last counted hit on it or note_hp, whichever came
+--                      last; nil while neither came), killed, killed_at = seconds since t0, without the pause | nil,
 --                      killer = actor key | "env" | "other" | nil,
 --                      last_hit = t of the latest hit on it by the party or an ally (the clock of t0) | nil }
 --     detail: only with `full` (see ledger.lua)
@@ -554,6 +557,28 @@ function Fight:alias(key, to_key)
     local e = self.enemies[to_key]
     if e == nil or key == to_key then return end
     self.aliases[key] = e.actor
+end
+
+local function finite(x)
+    return type(x) == "number" and x == x and x ~= math.huge and x ~= -math.huge
+end
+
+-- The HP character `key` has now, as the game shows it, read outside the hits (DD2DamageMeter.lua: the HP numbers'
+-- read of a frame): the HP the game takes away (or gives back) where no counted hit sees it, and the HP of a hit
+-- before the live window's next build. The fight's enemy it counts as (itself, the body kept for a linked body, the
+-- enemy a returning enemy's new object continues) takes `hp` as its HP left (0 at the least) and `full` as its full
+-- HP when that is more. Nothing for a key that is no enemy of the fight, a killed one (its 0 and its kill stay), or an
+-- `hp` that is not a finite number (a `full` that is not one is left out). Gives that enemy's key and its entry (the
+-- fight's own table, to read: max_hp, hp, killed), nil when nothing was taken.
+function Fight:note_hp(key, hp, full)
+    if not finite(hp) then return nil end
+    local to = kept_as(self, key)
+    if to then key = to.key end
+    local e = self.enemies[key]
+    if e == nil or e.killed then return nil end
+    e.hp = math.max(hp, 0)
+    if finite(full) and full > e.max_hp then e.max_hp = full end
+    return key, e
 end
 
 -- The actor is copied too: a later rename or kind change (a pawn's HUD name, a dismissed pawn, a neutral who
