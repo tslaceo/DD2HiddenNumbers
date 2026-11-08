@@ -83,6 +83,17 @@ test("the texts: the status word; value / threshold and ≈ hits, the plural for
     i18n.set("ru")
 end)
 
+test("Blind's row: its word with « ?» after it, in both languages; another status's without", function()
+    local BLIND = { id = 23, name = "Blind", value = 40, max = 100, hits = 3 }
+    i18n.set("ru")
+    eq(BuildupBars.label(BLIND), "Ослепление ?", "ru")
+    eq(BuildupBars.label(FAINT), "Обморок", "Faint unmarked")
+    i18n.set("en")
+    eq(BuildupBars.label(BLIND), "Blindness ?", "en")
+    eq(BuildupBars.label(FAINT), "Faint", "Faint unmarked in English")
+    i18n.set("ru")
+end)
+
 test("the colour of each status, any other grey", function()
     local want = {
         Poison = 0x8FD16A, VirulentPoison = 0x8FD16A, FireSpread = 0xF0A050, OilSpread = 0xF0A050,

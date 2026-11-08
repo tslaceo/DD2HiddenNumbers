@@ -206,8 +206,24 @@ test("an all-×1 row (Нёккен): every cell 1,0 plain, none underlined, no p
     eq(row_text(rows[2]), "Нёккен | 1,0 1,0 1,0 1,0 1,0 1,0 1,0 1,0", "every column ×1,0")
     eq(colors_of(rows[2]), "pppppppp", "plain"); eq(best_of(rows[2]), "", "none underlined")
     local lines = EnemyPlate.lines(plate)
-    eq(text_of(lines[1]), "Нёккен: не действует Обморожение, Заморозка, Ослепление", "its immunities below")
+    eq(text_of(lines[1]), "Нёккен: не действует Обморожение, Заморозка, Ослепление ?", "its immunities below")
     eq(text_of(lines[2]), "ты: Режущий ×1,0", "you: its number")
+end)
+
+test("the immunity line: Blind with « ?» after it, in both languages; another status without, the order kept",
+    function()
+    local kinds = { kind(OGRE, "Огр", 1, OGRE_PLAIN, nil, enabled_without("Sleep", "Frostbite", "Blind")) }
+    i18n.set("ru")
+    eq(text_of(EnemyPlate.lines(build(kinds))[1]), "Огр: не действует Сон, Обморожение, Ослепление ?",
+        "ru: Blind marked, last as in Journal.STATUSES")
+    eq(text_of(EnemyPlate.lines(build({ kind(OGRE, "Огр", 1, OGRE_PLAIN, nil, enabled_without("Sleep")) }))[1]),
+        "Огр: не действует Сон", "no Blind: no mark")
+    eq(text_of(EnemyPlate.lines(build({ kind(OGRE, "Огр", 1, OGRE_PLAIN, nil, enabled_without("Blind")) }))[1]),
+        "Огр: не действует Ослепление ?", "Blind alone, the first of its line")
+    i18n.set("en")
+    kinds[1].name = "Ogre"
+    eq(text_of(EnemyPlate.lines(build(kinds))[1]), "Ogre: immune to Sleep, Frostbite, Blindness ?", "en")
+    i18n.set("ru")
 end)
 
 test("a row with no table: its name and «нет данных» across the columns; no header without a number", function()
@@ -310,7 +326,7 @@ test("a boss with a count and a state", function()
     eq(row_text(rows[2]), "Норганский великан ×2 (в ярости) | 0,8 0,8 0,8 1,0 0,4 0,8 0,8 0,8", "the boss first")
     eq(row_text(rows[3]), "  слабое место | 1,5 1,5 · 1,2 0,6 · · ·", "its part rows as before")
     eq(row_text(rows[5]), "Снежный огр | 0,6 0,6 0,6 0,4 0,6 0,75 0,6 0,6", "the ogre: Normal, no word")
-    eq(text_of(EnemyPlate.lines(plate)[1]), "Норганский великан (в ярости): не действует Ослепление",
+    eq(text_of(EnemyPlate.lines(plate)[1]), "Норганский великан (в ярости): не действует Ослепление ?",
         "its immunities: the state kept, the count left to the table")
 end)
 
@@ -367,7 +383,7 @@ test("without a boss an immunity line per kind that has immunities; under a boss
     -- under a boss: the boss's alone
     lines = EnemyPlate.lines(giant_plate())
     eq(#lines, 2, "the giant's immunities and you")
-    eq(text_of(lines[1]), "Норганский великан: не действует Ослепление", "the boss's; the ogre's sleep left out")
+    eq(text_of(lines[1]), "Норганский великан: не действует Ослепление ?", "the boss's; the ogre's sleep left out")
     eq(text_of(lines[2]), "ты: Режущий ×0,8", "you: the boss's value")
     lines = EnemyPlate.lines(build({ kind(NORGAN, "Гигант", 1, GIANT_BODY), kind(OGRE, "Огр", 1, OGRE_PLAIN, nil,
         enabled_without("Sleep")) }, nil, NORGAN))
@@ -463,7 +479,7 @@ test("the texts in English", function()
     eq(row_text(rows[5]), "Goblin ×4 | no data", "no table read")
     local lines = EnemyPlate.lines(plate)
     eq(text_of(lines[1]), "+3 more", "+N")
-    eq(text_of(lines[2]), "Norgan giant: immune to Blindness", "the immunities")
+    eq(text_of(lines[2]), "Norgan giant: immune to Blindness ?", "the immunities")
     eq(text_of(lines[3]), "you: Slash ×0.8", "you")
     lines = EnemyPlate.lines(build({ kind(GOBLIN, "Goblin", 5, ALL_ONE), kind(OGRE, "Ogre", 1, OGRE_PLAIN) },
         { phys = "Slash", enchant = "Fire" }))
@@ -954,7 +970,7 @@ test("layout: each column right-aligned, as wide as its widest header or cell; t
     eq(L.lines[5][7].x, 346 - 28, "the ogre's 0,75 fills the Молн column")
     eq(L.lines[2][5].under, true, "the giant's Fire underlined"); eq(L.lines[2][4].under, nil, "its Shoot not")
     eq(L.w, 411, "as wide as the table: the lines below are narrower")
-    eq(L.lines[7][1][1], "Норганский великан: не действует Ослепление", "the immunities")
+    eq(L.lines[7][1][1], "Норганский великан: не действует Ослепление ?", "the immunities")
     eq(L.lines[7][1].x, 0, "at the left"); eq(L.lines[8][1][1], "ты: Режущий ×0,8", "you last")
     eq(L.line_h, 14, "the line's height"); eq(L.gap, 6, "the gap")
     near(L.h, 8 * 14 + 7 * 6, 1e-9, "eight lines")
@@ -991,7 +1007,7 @@ test("layout: a table wider than the room is laid out at the largest whole-pixel
     eq(L.px, 10, "300 px: 10 px (293.6 px), 11 is 322.9 px"); eq(L.w <= 300, true, "fits: " .. L.w)
     eq(L.lines[2][1][1], "Норганский великан", "no name cut")
     eq(L.line_h, 10, "the lines at the font size"); near(L.gap, 6 * 10 / 14, 1e-9, "the gap with them")
-    eq(L.lines[7][1][1], "Норганский великан: не действует Ослепление", "the line below in one (215 px)")
+    eq(L.lines[7][1][1], "Норганский великан: не действует Ослепление ?", "the line below in one (225 px)")
     -- a set size that is not whole (the meter's scale 1.1): the whole sizes under it
     eq(EnemyPlate.layout(plate, 400, 15.4, measure_at).px, 13, "15.4 px set, 400 px: 13 px (14 is 411 px)")
     eq(EnemyPlate.layout(plate, 445, 15.4, measure_at).px, 15, "445 px: 15 px (440.4 px; 15.4 is 452.1 px)")

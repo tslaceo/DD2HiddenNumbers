@@ -188,6 +188,31 @@ test("a status name from the game starts with a capital letter", function()
         "the game's messages and the lang texts, each with a capital; another first character as it is")
 end)
 
+test("Blind in the immune list with « ?» after it, in both languages; the others without, the order kept", function()
+    local _, snap = F.build()
+    -- every status but Sleep, Frostbite and Blind works
+    snap.detail.kinds.c2300.enabled = (8388607 + 8388608) - 4 - 256 - 8388608
+    eq(table.concat(card(snap, 1, "ru").game.immune, ", "), "Сон, Обморожение, Ослепление ?",
+        "ru: Blind marked, Sleep and Frostbite not, in Journal.STATUSES order")
+    eq(table.concat(card(snap, 1, "en").game.immune, ", "), "Sleep, Frostbite, Blindness ?", "en: the same mark")
+    snap.detail.kinds.c2300.enabled = (8388607 + 8388608) - 4
+    eq(table.concat(card(snap, 1, "ru").game.immune, ", "), "Сон", "Blind works: no mark anywhere")
+    i18n.set("ru")
+end)
+
+test("unclear statuses: Blind alone, marked by its entry; mark_unclear adds « ?» to its text only", function()
+    local unclear = {}
+    for _, s in ipairs(Journal.STATUSES) do
+        if s.unclear then unclear[#unclear + 1] = s.name end
+    end
+    eq(table.concat(unclear, " "), "Blind", "Blind's entry has unclear = true, no other")
+    eq(Journal.mark_unclear("Blind", "Ослепление"), "Ослепление ?", "Blind")
+    eq(Journal.mark_unclear("Blind", "Blindness"), "Blindness ?", "Blind in English")
+    eq(Journal.mark_unclear("Sleep", "Сон"), "Сон", "another status as it is")
+    eq(Journal.mark_unclear("Stun", "Stun"), "Stun", "a name that is no entry as it is")
+    eq(Journal.mark_unclear(nil, "x"), "x", "no name"); eq(Journal.mark_unclear(5, "5"), "5", "a number")
+end)
+
 test("no enemy data: «нет данных»", function()
     for _, sel in ipairs({ 2, 3, 4 }) do
         local c = card(F.snap, sel)

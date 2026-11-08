@@ -5,9 +5,13 @@
 --
 --   Journal.TABS       { "summary", "enemies", "skills", "party", "heal", "chart", "record" } (titles: jtab_<id>)
 --   Journal.WEAK       { { bit, name, key } } the CharacterWeakpointType flags in display order, key = their text
---   Journal.STATUSES   { { bit, name, message|nil } } the StatusConditionFlag flags in display order; message = the
---                      game's message naming the status, lang key status_<name> as the fallback; the name shown
---                      starts with a capital (I18n.upper_first)
+--   Journal.STATUSES   { { bit, name, message|nil, unclear|nil } } the StatusConditionFlag flags in display order;
+--                      message = the game's message naming the status, lang key status_<name> as the fallback; the
+--                      name shown starts with a capital (I18n.upper_first); unclear = true for a status the game
+--                      keeps a flag for that nothing seen in game builds up (Blind): wherever the mod names it, its
+--                      name is followed by " ?" (Journal.mark_unclear)
+--   Journal.mark_unclear(name, text) -> text   `text` (a status's name as shown) with " ?" after it when the
+--     Journal.STATUSES entry named `name` is unclear; `text` as it is for any other name, or one that is no entry's
 --   Journal.type_label(jt) -> string   a Ledger.TYPES entry named
 --   Journal.shows_zero(v) -> boolean   true when I18n.num(v) is "0": a row of that value is not shown (a blocked blow,
 --     a grab); the totals and shares around it still count it
@@ -92,8 +96,19 @@ Journal.STATUSES = {
     { bit = 64, name = "OilSpread", message = "ui080101_36" },
     { bit = 2048, name = "Silence", message = "ui080101_45" },
     { bit = 4096, name = "Stone", message = "ui080101_44" },
-    { bit = 8388608, name = "Blind" },
+    -- the game keeps the flag, but no attack, skill, item, pawn or enemy seen built it up (checked 2026-11-08)
+    { bit = 8388608, name = "Blind", unclear = true },
 }
+
+local UNCLEAR = " ?" -- after an unclear status's name
+local STATUS_BY_NAME = {}
+for _, s in ipairs(Journal.STATUSES) do STATUS_BY_NAME[s.name] = s end
+
+function Journal.mark_unclear(name, text)
+    local s = name ~= nil and STATUS_BY_NAME[name] or nil
+    if s and s.unclear then return text .. UNCLEAR end
+    return text
+end
 
 local PARTY = { player = true, pawn = true }
 local PLAIN = { Slash = true, Blow = true, Shoot = true, Magic = true }
@@ -397,7 +412,9 @@ local function game_of(detail, kind_id, ctx)
         game.immune[1] = i18n.t("no_data")
     else
         for _, s in ipairs(Journal.STATUSES) do
-            if (enabled & s.bit) == 0 then game.immune[#game.immune + 1] = status_name(s, ctx) end
+            if (enabled & s.bit) == 0 then
+                game.immune[#game.immune + 1] = Journal.mark_unclear(s.name, status_name(s, ctx))
+            end
         end
     end
     local stats = {}

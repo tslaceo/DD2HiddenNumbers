@@ -66,10 +66,11 @@ How a fight is counted:
   and what each type does to its body in the game's table in use ("0.8", "1.0"). A row for its weak spot and one for
   its head follow when they take clearly more or less than the body ("·" where the part takes what the body takes).
   The best value of each row is underlined; "no data" stands across a row whose table could not be read. Below the
-  table: the status conditions that do not work on each kind (under a boss, on the boss), then a "you:" line with
-  what you hit with now and what it gets there (your hits of the last 10 seconds, or before your first hit your weapon
-  and its enchant). A table too wide for its place is drawn with a smaller font, so the plate stays clear of the
-  boss's bar. It shows while a fight is open or an enemy's health bar is drawn, and for 3 seconds after.
+  table: the status conditions that do not work on each kind (under a boss, on the boss; Blind is marked ?, see "Help
+  check the hidden stats"), then a "you:" line with what you hit with now and what it gets there (your hits of the
+  last 10 seconds, or before your first hit your weapon and its enchant). A table too wide for its place is drawn with
+  a smaller font, so the plate stays clear of the boss's bar. It shows while a fight is open or an enemy's health bar
+  is drawn, and for 3 seconds after.
   `enemy_plate` switches it off, `enemy_plate_size` sets its size (50 to 300 %).
 - Status buildup at the boss. Under the boss's health bar, first how far the boss is from a stagger and from a
   knock-down (Stagger "41 841 / 65 000", Knock down), then a row for each status building on it (poison, burning,
@@ -265,6 +266,10 @@ what you saw:
 - The Ring of Benevolence: how big a hit starts the healing and how long the healing lasts.
 - The Ring of Reversal: how much an enemy's hit heals you.
 - Exaltation: how much faster your stamina refills, timed from empty to full with and without it.
+
+The enemy plate and the journal mark Blind with ? too. The game keeps a Blind flag for each enemy, but nothing I tried
+builds it up: a censer, Warfarer skills, items, pawns, enemies. If you play a Trickster and see Blind rising under a
+boss's bar, tell me.
 
 ## Settings
 

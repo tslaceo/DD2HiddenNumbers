@@ -32,7 +32,8 @@
 --     Rows that are not tables are skipped; a plate that is not a table has none.
 --   EnemyPlate.lines(plate) -> { line }   the lines below the table, line = { { text, color } }: "+N ещё" (plate_more)
 --     when plate.more > 0; the immunity lines, "Нёккен (ранен): не действует Сон, Заморозка" (plate_immune; the
---     kind named with its state, without the count) in grey, one per kind with immunities in the table's
+--     kind named with its state, without the count; an unclear status's name with " ?" after it, Journal.mark_unclear:
+--     "Ослепление ?") in grey, one per kind with immunities in the table's
 --     order, under a boss the boss's alone, a line the same as one before it left out; then the "you" line.
 --     Their joints are in their line's colour; segments of one colour side by side are one
 --     segment, so each line is one segment while it fits.
@@ -326,7 +327,7 @@ local function immune_pieces(row)
     local out = {}
     for _, name in ipairs(list(row.immune)) do
         if type(name) == "string" then
-            local text = i18n.t("status_" .. name)
+            local text = Journal.mark_unclear(name, i18n.t("status_" .. name))
             if #out == 0 then text = i18n.t("plate_immune", name_text(row, true), text) end
             piece(out, text, "immune", LIST, "immune")
         end

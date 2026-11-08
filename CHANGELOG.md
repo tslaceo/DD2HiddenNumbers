@@ -1,5 +1,10 @@
 # Hidden Numbers - Changelog
 
+## Unreleased
+
+- Blind now has a ? after it on the enemy plate, in the journal and under a boss's bar: the game keeps a Blind flag
+  for each enemy, but nothing found in the game builds it up yet.
+
 ## 1.0.0
 
 Released 2026-11-07. The first public release.

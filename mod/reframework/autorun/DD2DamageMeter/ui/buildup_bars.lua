@@ -16,7 +16,8 @@
 -- duration (s, may be nil) and at (the read's t); any other row is a building one.
 --
 --   BuildupBars.label(row) -> text   a poise row's word (buildup_lean «Пошатнуть», buildup_blown «Опрокинуть», by its
---     id); a status's: status_<name>, else the enum name itself, else the id
+--     id); a status's: status_<name>, else the enum name itself, else the id; an unclear status's word with " ?"
+--     after it (Journal.mark_unclear: "Ослепление ?")
 --   BuildupBars.left(row, t) -> s   an active row's seconds left at t: max(0, remain - (t - at)), so that it drains
 --     between the reads; remain as read without a t, without an at, or with t before at
 --   BuildupBars.numbers(row, t, no_hits, no_resist) -> text   an active row's "ещё N с" (buildup_left; N the seconds
@@ -41,6 +42,7 @@
 --   BuildupBars.missing() -> { name }: the imgui calls found missing (get_display_size, get_background_draw_list), in
 --     order, not tried again until BuildupBars.reset(), which also forgets the measured widths
 local i18n = require("DD2DamageMeter/i18n")
+local Journal = require("DD2DamageMeter/journal")
 local Kit = require("DD2DamageMeter/ui/kit")
 local EnemyBars = require("DD2DamageMeter/ui/enemy_bars")
 local SceneText = require("DD2DamageMeter/ui/scene_text")
@@ -127,8 +129,8 @@ function BuildupBars.label(row)
     if type(name) == "string" and name ~= "" then
         local key = "status_" .. name
         local word = i18n.t(key)
-        if word ~= key then return word end -- i18n gives the key back for a text it does not have
-        return name
+        if word == key then word = name end -- i18n gives the key back for a text it does not have
+        return Journal.mark_unclear(name, word)
     end
     return tostring(row.id or "?")
 end
