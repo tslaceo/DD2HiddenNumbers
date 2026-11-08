@@ -50,11 +50,12 @@
 -- numbers and equipment (game/stat_check.lua) every 2 s and 1 s after a pause's end, a record each time his
 -- augments or gear changed together with his numbers (a new world, or what changed while `debug` was off, is no
 -- change). The file is appended to, kept across game sessions, and stops at 200 MB with one debug.log line; debug.log
--- also gets its size at the session's first record, after each fight's plate line one with the meets' cost, and once
--- a game session one when the player's augments cannot be read for the evidence (stat_sample). Each time the
--- hidden-stats panel stops being shown (nothing hovered on its screens any more), debug.log gets one line with its
--- cost since the last such line (log_hidden_cost); the first time in a game session it is placed on a screen by an
--- anchor with a part that fell back to its measured place, one line naming the parts (tell_anchor).
+-- also gets its size at the session's first record, after each fight's plate line one with the cost of the meets and
+-- of the evidence's snapshots, and once a game session one when the player's augments cannot be read for the
+-- evidence (stat_sample). Each time the hidden-stats panel stops being shown (nothing hovered on its screens any
+-- more), debug.log gets one line with its cost since the last such line (log_hidden_cost); the first time in a game
+-- session it is placed on a screen by an anchor with a part that fell back to its measured place, one line naming
+-- the parts (tell_anchor).
 -- With the setting `history_file` on, the kept fights (with their detail) are read from reframework/data/DD2DamageMeter/
 -- history.json once per Lua state (when it first loads this file, or else when the setting is switched on), and the
 -- whole history is written there (history_file.lua, at most 4 MB) after each kept fight, in the frame callback (a
@@ -357,8 +358,12 @@ S.hidden_cost = hidden_cost()
 S.anchor_told = S.anchor_told or {}
 -- HiddenScreens.gone() as debug.log last told it (note_gone).
 S.hidden_gone = S.hidden_gone or HiddenScreens.gone()
--- With `debug` on, the debug collector's meets and their time since they were last logged (log_collect_cost).
-S.collect_cost = { calls = 0, ms = 0, max = 0 }
+-- With `debug` on, the debug collector's meets and the hidden-stats evidence's snapshots, and their time, since they
+-- were last logged (log_collect_cost).
+local function collect_cost()
+    return { calls = 0, ms = 0, max = 0, samples = 0, sample_ms = 0, sample_max = 0 }
+end
+S.collect_cost = collect_cost()
 
 local ctx = { names = Names.new(names_game.lookup()), i18n = i18n }
 
@@ -493,13 +498,17 @@ local function collector_meet(character, actor, t)
     c.calls, c.ms, c.max = c.calls + 1, c.ms + ms, math.max(c.max, ms)
 end
 
--- "collect calls=95 avg=0.004ms max=2.100ms": the debug collector's meets since the last such line and their average
--- and largest time, written after each fight's plate line, none when there was no meet.
+-- "collect calls=95 avg=0.004ms max=2.100ms samples=12 sample_avg=0.310ms sample_max=1.200ms": the debug
+-- collector's meets since the last such line and their average and largest time, then the hidden-stats evidence's
+-- snapshots taken since (stat_sample) and theirs, written after each fight's plate line, none when there was neither.
 local function log_collect_cost()
     local c = S.collect_cost
-    if c.calls == 0 then return end
-    log_line(string.format("collect calls=%d avg=%.3fms max=%.3fms", c.calls, c.ms / c.calls, c.max))
-    S.collect_cost = { calls = 0, ms = 0, max = 0 }
+    if c.calls == 0 and c.samples == 0 then return end
+    local avg = c.calls > 0 and c.ms / c.calls or 0
+    local sample_avg = c.samples > 0 and c.sample_ms / c.samples or 0
+    log_line(string.format("collect calls=%d avg=%.3fms max=%.3fms samples=%d sample_avg=%.3fms sample_max=%.3fms",
+        c.calls, avg, c.max, c.samples, sample_avg, c.sample_max))
+    S.collect_cost = collect_cost()
 end
 
 -- The hidden-stats evidence, while the debug collector collects: a snapshot of the player's numbers and equipment
@@ -510,7 +519,8 @@ end
 -- there in that frame (stat_sample runs only in a frame world_frame found him, read anew), else in the first frame
 -- after with him there. Likewise STAT_AFTER_PAUSE s after he comes back (world_frame sets S.stat_due). A
 -- snapshot that is nil because no augment slot can be read is told in debug.log once a game session
--- (S.stat_augments_told): without the augments no change of them can make a record.
+-- (S.stat_augments_told): without the augments no change of them can make a record. Each snapshot with its record is
+-- timed by os.clock for log_collect_cost.
 local function stat_sample(t)
     local due, last = S.stat_due, S.stat_at
     if type(due) == "number" then
@@ -520,6 +530,7 @@ local function stat_sample(t)
         return
     end
     S.stat_at, S.stat_due = t, nil
+    local c0 = os.clock()
     local snapshot, why = StatCheck.snapshot()
     if why == "augments" and not S.stat_augments_told then
         S.stat_augments_told = true
@@ -527,6 +538,8 @@ local function stat_sample(t)
             .. "so no stat_check record")
     end
     Collector.stat_check(t, snapshot)
+    local ms, c = (os.clock() - c0) * 1000, S.collect_cost
+    c.samples, c.sample_ms, c.sample_max = c.samples + 1, c.sample_ms + ms, math.max(c.sample_max, ms)
 end
 
 -- history.json ---------------------------------------------------------------------------------------

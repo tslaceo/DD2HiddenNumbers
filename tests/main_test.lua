@@ -6266,6 +6266,40 @@ test("with debug on, the collector's meets are timed apart from the plate, in a 
     eq(M.info().errors, 0, "no error caught")
 end)
 
+test("with debug on, the hidden-stats evidence's snapshots are timed apart from the meets, in the collector's line",
+    function()
+    world({ settings = { debug = true } })
+    local M = load()
+    local SC = mod("game/stat_check")
+    local snapshot, clock, now, snaps = SC.snapshot, os.clock, 0, 0
+    -- os.clock stands still but for each snapshot, which takes 3 ms
+    os.clock = function() return now end
+    SC.snapshot = function(...)
+        snaps = snaps + 1
+        now = now + 0.003
+        return snapshot(...)
+    end
+    frame()
+    for _ = 1, 10 do frame(0.25) end
+    eq(snaps, 2, "two snapshots in 2.5 s")
+    eq(M.state.collect_cost.samples, 2, "both timed")
+    fight(strike)
+    os.clock, SC.snapshot = clock, snapshot
+    local log = R.files[LOG_FILE] or ""
+    eq(lines_with(log, "collect calls="), 1, "one collector line")
+    local calls, avg = log:match("collect calls=(%d+) avg=([%d.]+)ms")
+    eq(tonumber(calls) > 0 and tonumber(avg), 0, "the meets' time holds none of the snapshots'")
+    local samples, sample_avg, sample_max = log:match("samples=(%d+) sample_avg=([%d.]+)ms sample_max=([%d.]+)ms")
+    eq(tonumber(samples) + M.state.collect_cost.samples, snaps, "every snapshot counted once")
+    eq(tonumber(sample_avg), 3, "each 3 ms"); eq(tonumber(sample_max), 3, "the largest 3 ms")
+    -- with debug off nothing is timed
+    M.state.settings:set("debug", false)
+    local before = M.state.collect_cost.samples
+    for _ = 1, 10 do frame(0.5) end
+    eq(M.state.collect_cost.samples, before, "debug off: nothing timed")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
 test("the collector reads nothing in the frames between its looks once its keys are seen", function()
     -- the game calls of 20 frames 0.02 s apart, after the frame that met the ogre and the sword
     local function window(debug)
