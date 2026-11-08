@@ -276,14 +276,15 @@ test("snapshot: the vocation, the augments by name, the rings and the other gear
     for _, job in ipairs(G.ring_jobs) do eq(job, 10, "a ring read by his vocation") end
     -- another vocation: its own slots
     G.job = 4
-    G.slots[4] = { [0] = AUGMENT_ID.Job04_00, [1] = AUGMENT_ID.Job02_03 }
+    G.slots[4] = { [0] = AUGMENT_ID.Job04_00, [1] = AUGMENT_ID.Job02_03, [2] = 0, [3] = 0, [4] = 0, [5] = 0, [6] = 0 }
     e = SC.snapshot().equipped
     eq(e.job, 4, "the Thief"); eq(T.str(e.augments), "Job02_03 Job04_00", "his augments")
     -- an id the enum does not name is kept as its number
     G.slots[4][2] = 999
     eq(T.str(SC.snapshot().equipped.augments), "999 Job02_03 Job04_00", "999")
     -- a boxed id, as the game can give
-    G.slots[4] = { [0] = R.object("app.HumanAbilityID", { value__ = AUGMENT_ID.Job09_01 }) }
+    G.slots[4] = { [0] = R.object("app.HumanAbilityID", { value__ = AUGMENT_ID.Job09_01 }), [1] = 0, [2] = 0, [3] = 0,
+                   [4] = 0, [5] = 0, [6] = 0 }
     eq(T.str(SC.snapshot().equipped.augments), "Job09_01", "boxed")
 end)
 
@@ -305,14 +306,39 @@ test("snapshot is nil, \"augments\", when no augment slot can be read; empty slo
     G.slots[10] = { [0] = 0, [1] = 0, [2] = 0, [3] = 0, [4] = 0, [5] = 0, [6] = 0 }
     s, why = SC.snapshot()
     eq(s ~= nil and #s.equipped.augments, 0, "a snapshot with no augment"); eq(why, nil, "no why")
-    -- one slot read, the others not: the snapshot, as before (a slot not read counts as empty)
-    G.slots[10] = { [3] = AUGMENT_ID.Job10_04 }
-    s = SC.snapshot()
-    eq(s ~= nil and T.str(s.equipped.augments), "Job10_04", "the one read")
     -- a full snapshot gives no why
     SC = fresh()
     s, why = SC.snapshot()
     eq(s ~= nil, true, "a snapshot"); eq(why, nil, "no why")
+end)
+
+test("snapshot is nil, with no why, when one augment slot or one item cannot be read while the rest can", function()
+    local function skipped(what, setup)
+        local SC, Hook = fresh()
+        eq(SC.snapshot() ~= nil, true, what .. ": a snapshot before")
+        setup()
+        local s, why = SC.snapshot()
+        eq(s, nil, what .. ": that sample skipped (what was not read is not taken as empty)")
+        eq(why, nil, what .. ": no why")
+        eq(Hook.info().errors, 0, what .. ": no error of the mod's own")
+    end
+    skipped("a slot gives nothing", function() G.slots[10][2] = nil end)
+    skipped("one slot read, the others not", function() G.slots[10] = { [3] = AUGMENT_ID.Job10_04 } end)
+    skipped("a slot gives no number", function() G.slots[10][4] = "Job04_00" end)
+    skipped("an item's id cannot be read", function()
+        local calc = G.calcs[2][2]
+        local get = calc.methods.getEquipData
+        calc.methods.getEquipData = function(...)
+            local roe = get(...)
+            roe.fields.Data.fields.Equips.items[1].methods.get_ItemId = function() return nil end
+            return roe
+        end
+    end)
+    -- an id the enum does not name is read: kept as its number, the snapshot taken
+    local SC = fresh()
+    G.slots[10][1] = 999
+    local s = SC.snapshot()
+    eq(s ~= nil and T.str(s.equipped.augments), "999 Job01_01 Job05_00 Job10_04", "an unnamed id: a snapshot")
 end)
 
 test("snapshot: the Equips array is read by get_elements (get_Item gives nil in the game)", function()
@@ -410,7 +436,7 @@ test("fakes that raise: nil, or that part left out; nothing raises, no error of 
             roe.fields.Data.fields.Equips.items[2].poison = true
             return roe
         end
-    end, function(s) eq(T.str(s.equipped.rings) .. "|" .. #s.equipped.items, "3502|0", "that slot left out") end)
+    end, function(s) eq(s, nil, "an item slot not read: no snapshot") end)
     case("the EquipParam", function()
         local calc = G.calcs[2][2]
         local get = calc.methods.getEquipData

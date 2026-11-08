@@ -29,15 +29,18 @@
 --       job: the player's current vocation (HiddenScreens.job());
 --       augments: the app.HumanAbilityID names ("Job05_00"; an id without a name, its number as text) of his Human's
 --         <AbilityContext>k__BackingField getAbility(job, slot) for slots No0..No6, an empty slot (0) left out,
---         sorted (a slot that gives nothing counts as empty while another slot can be read): HiddenScreens.augments,
---         which the hidden-stats panel's total line reads too and takes only when whole; its second value
---         is not used here;
+--         sorted: HiddenScreens.augments, which the hidden-stats panel's total line reads too (it takes them only
+--         whole: an id without a name is unknown there, its number here);
 --       rings / items: of getEquipData().Data.Equips (app.ItemDefine.StorageData[], a game array: read by
---         get_elements, its get_Item gives nil), each get_ItemId() above 0 (HiddenScreens.equips): the rings
---         (HiddenStatsGame.ring(id, job) gives one) and the rest (weapons, armour), each sorted.
+--         get_elements, its get_Item gives nil), each get_ItemId() above 0 (HiddenScreens.equips, read whole): the
+--         rings (HiddenStatsGame.ring(id, job) gives one) and the rest (weapons, armour), each sorted.
 --     nil when the player's CharaID, his calculator, either status struct, the Equips, his vocation or his
---     AbilityContext cannot be read; nil, "augments" when none of the 7 augment slots can be read (getAbility gives
---     nothing for each: the augments are unknown, not empty, and an augment change could never be told).
+--     AbilityContext cannot be read, and when one part is read and another not: an augment slot that gives no
+--     number while another does, an Equips entry that cannot be had or gives no id, an Equips array longer than
+--     HiddenScreens' MAX_EQUIPS or without a length. What was not read is not taken as empty: the next snapshot
+--     would show it as put on, a record of a change that never was; the collector keeps its last snapshot. nil,
+--     "augments" when none of the 7 augment slots can be read (getAbility gives nothing for each: the augments are
+--     unknown, not empty, and an augment change could never be told).
 -- A type's field names are kept for the session once read (by its full name).
 local Safe = require("DD2DamageMeter/game/safe")
 local Hook = require("DD2DamageMeter/game/hook")
@@ -120,10 +123,10 @@ end
 
 -- equipment ----------------------------------------------------------------------------------------------------------
 
--- The rings and the other items of the Equips array; nil when it cannot be read.
+-- The rings and the other items of the Equips array; nil when it is not read whole.
 local function items_of(equips, job)
-    local ids = HiddenScreens.equips(equips)
-    if ids == nil then return nil end
+    local ids, whole = HiddenScreens.equips(equips)
+    if ids == nil or whole ~= true then return nil end
     local rings, items = {}, {}
     for _, id in ipairs(ids) do
         local list = HiddenStatsGame.ring(id, job) ~= nil and rings or items
@@ -149,8 +152,9 @@ local function read()
     local human = Safe.call(Safe.call(Safe.singleton("app.CharacterManager"), "get_ManualPlayer"), "get_Human")
     local context = Safe.field(human, ABILITY_CONTEXT)
     if context == nil then return nil end
-    local augments = HiddenScreens.augments(context, job)
+    local augments, _, all_read = HiddenScreens.augments(context, job)
     if augments == nil then return nil, "augments" end
+    if all_read ~= true then return nil end
     local rings, items = items_of(equips, job)
     if rings == nil then return nil end
 

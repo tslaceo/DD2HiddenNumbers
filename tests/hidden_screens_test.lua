@@ -1306,6 +1306,8 @@ test("equipped is unknown, not \"not on\", when one slot or entry is not read", 
     end, function(e) eq(e.augments, nil, "unknown") end)
     case("an id with no name", function() G.player_slots[4][5] = 999 end,
         function(e) eq(e.augments, nil, "999 might be Стойкость under another value: unknown") end)
+    case("a negative id", function() G.player_slots[4][5] = -3 end,
+        function(e) eq(e.augments, nil, "not 0, so not an empty slot, and no name: unknown") end)
     -- the items: an entry that cannot be read, or more than MAX_EQUIPS (32)
     case("a null entry", function() G.calcs[1][2].n.equips = { 1001, 3502, false } end,
         function(e) eq(keys(e.items), "1001 3502", "a null entry is an empty slot: read") end)
@@ -1341,6 +1343,21 @@ test("equipped is unknown, not \"not on\", when one slot or entry is not read", 
                 { Equips = equips_giving(elements) }) })
         end
     end, function(e) eq(e.items, nil, "unknown") end)
+    case("an array with no length", function()
+        local calc = G.calcs[1][2]
+        calc.methods.getEquipData = function()
+            local entries = { storage(3502), false, storage(1001) }
+            local elements = setmetatable({}, {
+                __len = function() error("no length") end,
+                __index = function(_, i) return entries[i] end,
+            })
+            return R.object("app.ReadOnlyEquipData", { Data = R.object("app.EquipData",
+                { Equips = equips_giving(elements) }) })
+        end
+    end, function(e)
+        eq(e.items, nil, "walked, but a null entry and an unread one look alike: unknown")
+        eq(keys(e.augments), "Job01_01 Job05_00", "the augments stay")
+    end)
     case("33 entries", function()
         local ids = {}
         for i = 1, 33 do ids[i] = 0 end
@@ -1377,18 +1394,29 @@ end)
 test("augments(context, job) and equips(array): the reading game/stat_check.lua shares, and whether it is whole",
     function()
     local HS = fresh()
-    local list, whole = HS.augments(G.player_ac, 4)
+    local list, whole, all_read = HS.augments(G.player_ac, 4)
     eq(table.concat(list, " "), "Job01_01 Job05_00", "the names, sorted")
     eq(whole, true, "every slot read and named")
-    eq(HS.augments(G.player_ac, 7), nil, "no slot of that vocation read")
+    eq(all_read, true, "every slot gave a number")
+    list, whole, all_read = HS.augments(G.player_ac, 7)
+    eq(tostring(list) .. " " .. tostring(whole) .. " " .. tostring(all_read), "nil false false",
+        "no slot of that vocation read")
     eq(HS.augments(nil, 4), nil, "no context")
-    -- stat_check's rule: a slot that gives nothing counts as empty while another reads; an unnamed id is its number
+    -- a slot that gives nothing counts as empty while another reads; an unnamed id is its number
     G.player_slots[4] = { [0] = 999, [2] = ID.Job01_01 }
-    list, whole = HS.augments(G.player_ac, 4)
+    list, whole, all_read = HS.augments(G.player_ac, 4)
     eq(table.concat(list, " "), "999 Job01_01", "the list as before")
     eq(whole, false, "not whole")
+    eq(all_read, false, "a slot gave nothing")
     G.player_slots[4] = slots_of(999)
-    eq(select(2, HS.augments(G.player_ac, 4)), false, "an unnamed id alone: not whole")
+    list, whole, all_read = HS.augments(G.player_ac, 4)
+    eq(whole, false, "an unnamed id alone: not whole")
+    eq(all_read, true, "but every slot gave a number")
+    -- a negative id is not an empty slot: listed by its number, and the read is not whole
+    G.player_slots[4] = slots_of(-3, ID.Job01_01)
+    list, whole, all_read = HS.augments(G.player_ac, 4)
+    eq(table.concat(list, " ") .. " " .. tostring(whole) .. " " .. tostring(all_read), "-3 Job01_01 false true",
+        "a negative id")
     local ids
     ids, whole = HS.equips(R.array({ storage(3502), false, storage(0), storage(1001) }, "app.ItemDefine.StorageData[]"))
     eq(table.concat(ids, " "), "3502 1001", "the ids above 0, in the array's order")
@@ -1398,6 +1426,13 @@ test("augments(context, job) and equips(array): the reading game/stat_check.lua 
     local bad = R.object("app.ItemDefine.StorageData", {}, { get_ItemId = function() return nil end })
     ids, whole = HS.equips(R.array({ storage(3502), bad }, "app.ItemDefine.StorageData[]"))
     eq(table.concat(ids, " ") .. " " .. tostring(whole), "3502 false", "an unread entry: the rest, not whole")
+    -- no length: walked as Safe.items walks it, never whole
+    local entries = { storage(3502), false, storage(1001) }
+    ids, whole = HS.equips(equips_giving(setmetatable({}, {
+        __len = function() error("no length") end,
+        __index = function(_, i) return entries[i] end,
+    })))
+    eq(table.concat(ids, " ") .. " " .. tostring(whole), "3502 1001 false", "no length: the ids walked, not whole")
 end)
 
 -- raising fakes -----------------------------------------------------------------------------------------------------

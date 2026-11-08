@@ -75,18 +75,18 @@
 --       Human's vocation (get_JobContext().CurrentJob); the Human is the player's get_ManualPlayer():get_Human() when
 --       chara_id is the player's (as game/stat_check.lua reads it), else (and when that gives none) the calculator's
 --       Human field, never another character's; nil when the Human, its vocation (None too) or its
---       AbilityContext cannot be read, or the read is not whole: a slot gives no number, or an id above 0 has no
---       name in app.HumanAbilityID;
+--       AbilityContext cannot be read, or the read is not whole: a slot gives no number, or an id other than 0 has
+--       no name in app.HumanAbilityID;
 --     items = { [id] = true }: HiddenScreens.equips of the calculator's getEquipData().Data.Equips; nil when it
 --       cannot be read or the read is not whole: an entry cannot be had or gives no id, or the array is longer than
 --       MAX_EQUIPS;
 --     nil when chara_id is not a number.
---   HiddenScreens.augments(context, job) -> { name... } | nil, whole   the app.HumanAbilityID names ("Job05_00"; an
---     id without a name, its number as text) of an app.AbilityContext's getAbility(job, slot) for slots No0..No6
---     (app.AbilityContext.AbilitySlot's seven; in the game each answers a number, 0 for an empty one), an empty
---     slot (0) left out, sorted; a slot that gives nothing counts as empty while another slot can be read (the rule
---     game/stat_check.lua reads the player's by); nil when none can be read. whole: every slot gave a number and
---     every id above 0 has a name (false with nil).
+--   HiddenScreens.augments(context, job) -> { name... } | nil, whole, all_read   the app.HumanAbilityID names
+--     ("Job05_00"; an id without a name, its number as text) of an app.AbilityContext's getAbility(job, slot) for
+--     slots No0..No6 (app.AbilityContext.AbilitySlot's seven; in the game each answers a number, 0 for an empty one),
+--     an empty slot (0) left out, sorted; a slot that gives nothing is left out while another slot can be read; nil
+--     when none can be read. whole: every slot gave a number and every id other than 0 has a name; all_read: every
+--     slot gave a number (game/stat_check.lua takes the player's only then); both false with nil.
 --   HiddenScreens.equips(equips) -> { id... } | nil, whole   the item ids above 0 of an Equips array
 --     (app.ItemDefine.StorageData[], a game array: read by get_elements, its get_Item gives nil), in its order, at most
 --     MAX_EQUIPS entries; a null entry is an empty slot, an entry that cannot be had or gives no id is left out; nil
@@ -678,34 +678,35 @@ function HiddenScreens.totals(chara_id)
     return nil
 end
 
--- The augments' names, sorted, and whether the read is whole; nil, false when no slot can be read (an empty slot
--- reads 0: a slot that gives nothing is not read, and with none read the augments are unknown, not empty).
+-- The augments' names, sorted, whether the read is whole and whether every slot gave a number; nil, false, false
+-- when no slot can be read (an empty slot reads 0: a slot that gives nothing is not read, and with none read the
+-- augments are unknown, not empty).
 local function augments_of(context, job)
-    if context == nil then return nil, false end
-    local out, read, whole = {}, 0, true
+    if context == nil then return nil, false, false end
+    local out, read, whole, all_read = {}, 0, true, true
     for slot = 0, SLOTS do
         local id = Safe.enum(Safe.call(context, GET_ABILITY, job, slot))
         if id == nil then
-            whole = false
+            whole, all_read = false, false
         else
             read = read + 1
-            if id > 0 then
+            if id ~= 0 then
                 local name = NamesGame.enum_name(ABILITY_ID, id)
                 if name == nil then whole = false end
                 out[#out + 1] = name or tostring(id)
             end
         end
     end
-    if read == 0 then return nil, false end
+    if read == 0 then return nil, false, false end
     table.sort(out)
-    return out, whole
+    return out, whole, all_read
 end
 
 function HiddenScreens.augments(context, job)
-    local ok, list, whole = pcall(augments_of, context, job)
-    if ok then return list, whole end
+    local ok, list, whole, all_read = pcall(augments_of, context, job)
+    if ok then return list, whole, all_read end
     Hook.fail("hidden_screens", list)
-    return nil, false
+    return nil, false, false
 end
 
 local function c_len(c) return #c end
