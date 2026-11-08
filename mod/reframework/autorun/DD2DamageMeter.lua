@@ -135,16 +135,16 @@
 -- on unchanged, and the summary's auto-hide counts from the pause's end.
 -- No game object kept from one frame to a later one is used once a scene change may have destroyed it (a game
 -- method called on such an object can fault inside the game and leave it hung). The objects kept are the
--- hidden-stats panel's screens with their elements, the game's bars (the overhead ones, the boss bar, the player's
--- HUD) and the pause manager. Each frame first reads the party listing anew (world_frame: the player character and the
--- pawns, once a frame for everything that needs it): without a player character (a title screen, a load, a save
--- being quit) the world is going, the objects kept are dropped in the first such frame, and while it lasts neither
--- screens nor bars are read (nor the debug evidence taken); with him back they are looked for again, and the evidence
--- waits a second. Each scene-type change drops them too, whatever the player. A kept screen the game destroyed
--- before either told is still caught by its own read (the last guard: its get_DrawSelf raises and it is dropped). The
--- party's HP poll and skill states read the characters of that frame's listing, never ones kept from an earlier one
--- (game/actors.lua, game/heals.lua); a party read without a player reads no pawn. With `debug` on,
--- debug.log tells each of these by frame (world_frame, on_scene_change, note_gone), so that an exit to the title shows
+-- hidden-stats panel's screens with their elements and the game's bars (the overhead ones, the boss bar, the player's
+-- HUD); the pause manager is looked up by name in each frame it is read. Each frame first reads the party listing anew
+-- (world_frame: the player character and the pawns, once a frame for everything that needs it): without a player
+-- character (a title screen, a load, a save being quit) the world is going, the objects kept are dropped in the first
+-- such frame, and while it lasts neither screens nor bars are read (nor the debug evidence taken); with him back they
+-- are looked for again, and the evidence waits a second. Each scene-type change drops them too, whatever the player.
+-- A kept screen the game destroyed before either told is still caught by its own read (the last guard: its
+-- get_DrawSelf raises and it is dropped). The party's HP poll and skill states read the characters of that frame's
+-- listing, never ones kept from an earlier one (game/actors.lua, game/heals.lua); a party read without a player reads
+-- no pawn. With `debug` on, debug.log tells each of these by frame (world_frame, on_scene_change, note_gone), so that an exit to the title shows
 -- which came first.
 --
 -- Reload-safe: the state lives in the global DD2DM (DD2DM.state) and survives a
@@ -869,7 +869,6 @@ local function reset_world()
     enemies.reset()
     names_game.reset()
     gauges.reset()
-    pause.reset()
     EnemyTable.reset()
     Weapon.reset()
     EnemyPlate.reset()
@@ -888,12 +887,12 @@ end
 
 -- The game objects kept from one frame to a later one that a scene change destroys: the hidden-stats panel's
 -- screens and their elements, the bars over heads, the boss bar and the player's HUD (they are only read in a frame
--- the world is there, and read anew after this), and the pause manager (looked up by name at its next read).
--- The bars are forgotten, not reset: the next look takes all of them at once (one look, not one a kind).
+-- the world is there, and read anew after this). The pause manager is not kept (game/pause.lua looks it up by name
+-- at each read). The bars are forgotten, not reset: the next look takes all of them at once (one look, not one a
+-- kind).
 local function drop_kept()
     HiddenScreens.forget()
     gauges.forget()
-    pause.reset()
 end
 
 -- The game changes its scene type without a load too, and on a load the new player may not be there yet. The hook

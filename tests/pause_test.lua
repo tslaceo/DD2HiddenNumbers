@@ -8,7 +8,6 @@ local pause = require("DD2DamageMeter/game/pause")
 -- A fresh game whose app.PauseManager answers state.paused; state.lookups counts sdk.get_managed_singleton.
 local function game()
     R.new()
-    pause.reset()
     local state = { paused = false, lookups = 0 }
     R.method("app.PauseManager", "isPausedAny", function() return state.paused end)
     state.manager = R.object("app.PauseManager")
@@ -21,6 +20,15 @@ local function game()
     return state
 end
 
+-- The game calls made on `object` so far.
+local function calls_on(object)
+    local n = 0
+    for _, c in ipairs(R.calls) do
+        if c.this == object then n = n + 1 end
+    end
+    return n
+end
+
 test("paused follows the game's isPausedAny", function()
     local state = game()
     eq(pause.paused(), false, "playing")
@@ -30,15 +38,26 @@ test("paused follows the game's isPausedAny", function()
     eq(pause.paused(), false, "closed")
 end)
 
-test("one call a frame: the manager is looked up once and kept", function()
+test("one call a frame: the manager is looked up by name at each read, never kept", function()
     local state = game()
     for _ = 1, 10 do pause.paused() end
-    eq(state.lookups, 1, "one lookup")
-    eq(#R.calls_of("isPausedAny"), 10, "one call a frame")
+    eq(state.lookups, 10, "one lookup a read")
+    eq(#R.calls_of("isPausedAny"), 10, "one call a read")
     eq(#R.calls, 10, "nothing else asked")
-    pause.reset()
-    pause.paused()
-    eq(state.lookups, 2, "a reset looks it up again")
+end)
+
+test("a manager the game made anew is read at once; the old one is never asked again", function()
+    local state = game()
+    state.paused = true
+    eq(pause.paused(), true, "the first manager answers")
+    local old = state.manager
+    local fresh = R.object("app.PauseManager")
+    R.singleton("app.PauseManager", fresh)
+    local before = calls_on(old)
+    eq(pause.paused(), true, "the new manager answers")
+    eq(pause.paused(), true, "and again")
+    eq(calls_on(old), before, "the old manager not asked")
+    eq(calls_on(fresh), 2, "the new one asked each read")
 end)
 
 test("nothing to read counts as not paused", function()
@@ -54,17 +73,15 @@ test("nothing to read counts as not paused", function()
     eq(pause.paused(), false, "the lookup raises")
 end)
 
-test("a raising or odd answer counts as not paused and forgets the manager", function()
+test("a raising or odd answer counts as not paused", function()
     local state = game()
     eq(pause.paused(), false, "read once")
-    -- the call raises (the game destroyed the manager): not paused, looked up again on the next frame
+    -- the call raises (the game destroyed the manager): not paused; the next frame reads the new one
     state.manager.poison = true
     state.paused = true
     eq(pause.paused(), false, "a call that raises")
-    local fresh = R.object("app.PauseManager")
-    R.singleton("app.PauseManager", fresh)
+    R.singleton("app.PauseManager", R.object("app.PauseManager"))
     eq(pause.paused(), true, "the new manager answers")
-    eq(state.lookups, 2, "looked up again once")
     -- an answer that is not a boolean
     for _, odd in ipairs({ 1, "true", {} }) do
         state.paused = odd

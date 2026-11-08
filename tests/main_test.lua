@@ -4791,29 +4791,25 @@ test("the pause costs one game call a frame, none while the journal is open", fu
     frame()
     fight(strike)
     local function reads() return #R.calls_of("isPausedAny") end
-    local at_start = reads()
+    local at_start, looked = reads(), lookups
     for _ = 1, 10 do frame() end
     eq(reads() - at_start, 10, "one isPausedAny a frame")
-    eq(lookups, 1, "the manager looked up once and kept")
+    eq(lookups - looked, 10, "the manager looked up by name each frame, not kept")
     W.paused = true
-    at_start = reads()
+    at_start, looked = reads(), lookups
     for _ = 1, 10 do frame() end
     eq(reads() - at_start, 10, "paused: the same")
-    eq(lookups, 1, "still kept")
+    eq(lookups - looked, 10, "paused: looked up each frame")
     W.paused = false
     frame()
     -- the journal open: not read
     press(F7)
     eq(M.info().journal, true, "the journal is open")
-    at_start = reads()
+    at_start, looked = reads(), lookups
     for _ = 1, 5 do frame() end
     eq(reads(), at_start, "the journal open: not read")
+    eq(lookups, looked, "the journal open: not looked up")
     press(F7)
-    -- a new world: looked up again
-    R.method("app.CharacterManager", "get_ManualPlayer", function() return nil end)
-    scene_change()
-    frame()
-    eq(lookups, 2, "a new world looks it up again")
     eq(M.info().errors, 0, "no error caught")
 end)
 
@@ -7250,10 +7246,10 @@ test("the snapshot after a pause is taken 1 s after its end and only with the pl
     eq(M.info().errors, 0, "no error caught")
 end)
 
-test("the pause manager kept is dropped at each scene-type change and in the first frame without a player",
+test("the pause manager is never kept: a scene change's new manager is read, the old one never asked again",
         function()
     world()
-    pause_manager()
+    local old = pause_manager()
     local lookups = 0
     local lookup = sdk.get_managed_singleton
     sdk.get_managed_singleton = function(name)
@@ -7263,23 +7259,30 @@ test("the pause manager kept is dropped at each scene-type change and in the fir
     local M = load()
     frame()
     frame()
-    eq(lookups, 1, "looked up once and kept")
-    -- a scene-type change with the player there: the manager kept is dropped, looked up anew at the next read
+    eq(lookups, 2, "looked up in each frame")
+    -- a scene-type change with the player there, the game's manager made anew: the next frame reads the new one
+    local fresh = R.object("app.PauseManager")
+    R.singleton("app.PauseManager", fresh)
     scene_change()
+    local on_old, on_fresh = calls_on({ old }), calls_on({ fresh })
+    W.paused = true
     frame()
-    eq(lookups, 2, "looked up again after the change")
+    eq(M.state.paused, true, "the new manager's pause is read")
+    eq(on_old(), 0, "the old manager not asked")
+    eq(on_fresh(), 1, "the new one asked once")
+    W.paused = false
     frame()
-    eq(lookups, 2, "and kept")
-    -- the player gone: dropped in that frame, then looked up anew by name
+    -- the player gone (a load): still looked up in each frame it is read, never kept into the next
     local player = W.player
     W.player = nil
+    local looked = lookups
     frame()
-    eq(lookups, 3, "looked up again in the first frame without him")
     frame()
-    eq(lookups, 3, "not every frame")
+    eq(lookups - looked, 2, "looked up in each frame without him")
     W.player = player
     frame()
-    eq(lookups, 3, "his return changes nothing")
+    eq(lookups - looked, 3, "and with him back")
+    eq(on_old(), 0, "the old manager never asked")
     eq(M.info().errors, 0, "no error caught")
 end)
 
