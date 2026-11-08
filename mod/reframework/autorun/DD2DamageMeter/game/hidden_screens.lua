@@ -1,11 +1,20 @@
 -- The three screens the hidden-stats panel stands by (the guild's augments screen, the item screen and the
--- equipment screen; read in the game on 2026-11-06): which one is shown, what is hovered there, whose it is and
--- where the panel goes; and a character's base stats. Read-only: every game access under Safe or pcall, no hooks,
--- no setters; never raises.
+-- equipment screen; read in the game on 2026-11-06, whose on the item screen on 2026-11-08): which one is shown,
+-- what is hovered there, whose it is and where the panel goes; and a character's base stats. Read-only: every game
+-- access under Safe or pcall, no hooks, no setters; never raises.
 --
 -- Each screen is a via.gui.GUI whose GameObject has the screen's name, shown while its get_DrawSelf() is true, with an
 -- app.<name> component:
---   ui060301_00 "items"      the item screen: the inventory, always the player's;
+--   ui060301_00 "items"      the item screen, the party's bags (one tab each), and the storage chest's too (the
+--                            component's DispType, an app.ui060301_00.SelectType, is 0 Inventry for the bags and
+--                            3 Warehouse_Out for taking from the chest; not read). Whose: the owner of the bag the
+--                            hovered item is in, its Storage's _CharaId (app.CharacterID: 2891076981, the player, in
+--                            his bag; 2283028347, a pawn, in hers); else, for an item of no one's (in the chest its
+--                            _CharaId is 65535, the chest's own, as is the component's CharaList[4].CharaId), the
+--                            character selected on the left, the one the item would go to: the component's CharaTab
+--                            (app.GUIBase.CharaChangeRef) get_SelectedCharaID() (Z / C switch; 2891076981 with the
+--                            player selected, 2283028347 after C); each taken only when it has a calculator (a party
+--                            member's: see base);
 --   ui060401_00 "equipment"  the equipment-change screen: the component's DispCharaId (app.CharacterID) is the one
 --                            shown (Z / C switch);
 --     on both, the hovered item is the component's ItemGrid._ItemCtrl:get_SelectedInfo().Storage:get_ItemId();
@@ -20,11 +29,12 @@
 --   HiddenScreens.current(t) -> Hover | nil   (t: seconds)
 --     Hover = { kind = "augment", name = "Job05_00" } | { kind = "ring", id = 3502 }, both with
 --       screen = "augments" | "items" | "equipment";
---       chara_id: the shown character's app.CharacterID as a non-negative integer (the item screen: the player's),
---         nil when it cannot be read;
+--       chara_id: the shown character's app.CharacterID as a non-negative integer (the item screen: the bag's
+--         owner, else the character selected), nil when it cannot be read; on the item screen also when neither
+--         is a party member's: never the player's unless one of the two says so;
 --       who = "player" when chara_id is the player's (app.CharacterManager:get_ManualPlayer()'s get_CharaID(), else
---         its <CharaID>k__BackingField), "pawn" when it is another's; always "player" on the item screen; nil when
---         either id cannot be read;
+--         its <CharaID>k__BackingField), "pawn" when it is another's; nil when either id cannot be read (on the item
+--         screen also when chara_id is nil);
 --       anchor = { x, y, width, up, read } in GUI space (1920 x 1080), where the panel goes, each part read anew on
 --         every call, but a part read from a scroll list's row (the item screens' y, the guild's width: see below):
 --         the item screens: x = /PNL_Main/PNL_Control/PNL_ItemInfo/PNL_Control/txt_Name's global x, y = the
@@ -115,7 +125,8 @@
 -- call more a kept screen read) gives false (the game destroyed it: counted by invalid, get_DrawSelf not called), or
 -- when its get_Valid or get_DrawSelf raises (the game destroyed it under the mod: the last guard, counted by gone).
 -- Without a get_Valid in the game, get_DrawSelf alone, as before. Its elements are read only in a frame its
--- get_DrawSelf said it is drawn. The hovered thing, whose and the anchor are read on every call.
+-- get_DrawSelf said it is drawn. The hovered thing, whose and the anchor are read on every call (on the item screen,
+-- whose with one or two looks through the calculators, as base looks).
 -- The item screens' description elements and the guild's header are found under the GUI's get_View by their names
 -- as direct children, the first time the screen is read, and again at most every SCAN_EVERY seconds while one is
 -- missing or its position cannot be read; the scroll lists' rows are found the same way each time they are read
@@ -252,6 +263,50 @@ local function who_of(id)
     local mine = player_id()
     if mine == nil then return nil end
     return id == mine and "player" or "pawn"
+end
+
+-- The calculator whose key is `id`: by the dictionary's enumerator, else by ContainsKey / get_Item.
+local function calculator_of(dict, id)
+    local en = Safe.call(dict, "GetEnumerator")
+    if en ~= nil then
+        for _ = 1, MAX_CALCULATORS do
+            if Safe.call(en, "MoveNext") ~= true then break end
+            local kv = Safe.call(en, "get_Current")
+            local key = Safe.field(kv, "key")
+            if key == nil then key = Safe.call(kv, "get_Key") end
+            if chara(key) == id then
+                local value = Safe.field(kv, "value")
+                if value == nil then value = Safe.call(kv, "get_Value") end
+                if value ~= nil then return value end
+            end
+        end
+    end
+    if Safe.call(dict, "ContainsKey", id) ~= true then return nil end
+    return Safe.call(dict, "get_Item", id)
+end
+
+-- The status calculator of the character `id` (a CharacterID as chara() gives it), nil when it has none.
+local function calculator(id)
+    local holder = Safe.call(Safe.singleton("app.CharacterManager"), "get_PlayerStatusCalculatorHolder")
+    local dict = Safe.field(holder, "Calculators")
+    if dict == nil then return nil end
+    return calculator_of(dict, id)
+end
+
+-- A CharacterID read (as chara() takes it) when it is a party member's (one with a calculator), else nil.
+local function party(v)
+    local id = chara(v)
+    if id == nil or calculator(id) == nil then return nil end
+    return id
+end
+
+-- Whose the item screen's hovered item is: the owner of the bag it is in (its Storage's _CharaId), else, for an item
+-- of no one's (the storage chest's), the character selected on the left (CharaTab:get_SelectedCharaID()); each only
+-- when it is a party member's; nil when neither is.
+local function item_owner(comp, storage)
+    local id = party(Safe.field(storage, "_CharaId"))
+    if id ~= nil then return id end
+    return party(Safe.call(Safe.field(comp, "CharaTab"), "get_SelectedCharaID"))
 end
 
 -- the screens ---------------------------------------------------------------------------------------------------------
@@ -519,27 +574,27 @@ local function augment_hover(s, t)
              anchor = guild_anchor(s, t, text, key) }
 end
 
--- The hovered item's id, nil when there is none.
-local function item_id(comp)
+-- The hovered item's id and its Storage, nil when there is none.
+local function hovered_item(comp)
     local ctrl = Safe.field(Safe.field(comp, "ItemGrid"), "_ItemCtrl")
     local storage = Safe.field(Safe.call(ctrl, "get_SelectedInfo"), "Storage")
     local id = Safe.enum(Safe.call(storage, "get_ItemId"))
     if id == nil or id <= 0 then return nil end
-    return id
+    return id, storage
 end
 
 local function ring_hover(s, t)
-    local id = item_id(s.comp)
+    local id, storage = hovered_item(s.comp)
     -- whether it is a ring does not hang on the vocation: the player's, the one the panel reads the player's rings by
     -- (a pawn's are read by the pawn's), so his ring is read once
     if id == nil or HiddenStatsGame.ring(id, HiddenScreens.job()) == nil then return nil end
-    local chara_id, who
+    local chara_id
     if s.screen == "items" then
-        chara_id, who = player_id(), "player"
+        chara_id = item_owner(s.comp, storage)
     else
         chara_id = chara(Safe.field(s.comp, "DispCharaId"))
-        who = who_of(chara_id)
     end
+    local who = who_of(chara_id)
     local key = s.screen .. "|" .. id .. "|" .. tostring(chara_id)
     return { kind = "ring", id = id, screen = s.screen, who = who, chara_id = chara_id,
              anchor = item_anchor(s, t, key) }
@@ -570,34 +625,6 @@ function HiddenScreens.current(t)
 end
 
 -- the base ------------------------------------------------------------------------------------------------------------
-
--- The calculator whose key is `id`: by the dictionary's enumerator, else by ContainsKey / get_Item.
-local function calculator_of(dict, id)
-    local en = Safe.call(dict, "GetEnumerator")
-    if en ~= nil then
-        for _ = 1, MAX_CALCULATORS do
-            if Safe.call(en, "MoveNext") ~= true then break end
-            local kv = Safe.call(en, "get_Current")
-            local key = Safe.field(kv, "key")
-            if key == nil then key = Safe.call(kv, "get_Key") end
-            if chara(key) == id then
-                local value = Safe.field(kv, "value")
-                if value == nil then value = Safe.call(kv, "get_Value") end
-                if value ~= nil then return value end
-            end
-        end
-    end
-    if Safe.call(dict, "ContainsKey", id) ~= true then return nil end
-    return Safe.call(dict, "get_Item", id)
-end
-
--- The status calculator of the character `id` (a CharacterID as chara() gives it), nil when it has none.
-local function calculator(id)
-    local holder = Safe.call(Safe.singleton("app.CharacterManager"), "get_PlayerStatusCalculatorHolder")
-    local dict = Safe.field(holder, "Calculators")
-    if dict == nil then return nil end
-    return calculator_of(dict, id)
-end
 
 local function read_base(chara_id)
     local id = chara(chara_id)

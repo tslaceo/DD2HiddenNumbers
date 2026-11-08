@@ -6565,7 +6565,7 @@ local function hidden_screens()
     HG.augment = function(name) return W.augments[name] end
 end
 
--- A ring hovered on the item screen (the player's), or on the equipment screen (`who`, `chara_id`: whose).
+-- A ring hovered on `screen` (`who`, `chara_id`: whose); without `screen`, on the item screen in the player's bag.
 local function ring_hover(id, screen, who, chara_id)
     if screen == nil then screen, who, chara_id = "items", "player", PLAYER_ID end
     return { kind = "ring", id = id, screen = screen, who = who, chara_id = chara_id, anchor = ITEMS_ANCHOR }
@@ -7069,6 +7069,80 @@ test("a ring's numbers are read by the vocation of the character the screen show
     W.hover = ring_hover(10231)
     frame()
     eq(W.hs.ring_jobs[#W.hs.ring_jobs], 4, "the player's vocation")
+    eq(hidden_lines()[2], "≈ шанс у текущего призвания ×0,4", "his factor")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
+test("the item screen counts a ring in a pawn's bag for that pawn; a bag of no one known gets the hint", function()
+    world({ settings = { language = "ru" } })
+    local M = load()
+    hidden_screens()
+    W.bases[PLAYER_ID] = base_of("player", 380)
+    W.bases[CASCA_ID] = { who = "pawn", phys_defence = 375, magic_defence = 370, strength = 380, magic = 300 }
+    W.jobs = { player = 4, [CASCA_ID] = 5 }
+    -- Кольцо раздора (10224, type 50): +50 % of the base strength bare-handed
+    W.rings[10224] = { special = 50, v1 = 50, v2 = 0, v3 = 0, fields = {} }
+    W.hover = ring_hover(10224)
+    frame()
+    eq(hidden_text(), "голыми руками: +50% от базовой силы (у тебя 420) — сейчас +210", "in his bag: his")
+    -- Casca's tab on the item screen: hers
+    W.hover = ring_hover(10224, "items", "pawn", CASCA_ID)
+    frame()
+    eq(W.hs.base[#W.hs.base], CASCA_ID, "her base")
+    eq(W.hs.ring_jobs[#W.hs.ring_jobs], 5, "read by her vocation")
+    eq(hidden_text(), "голыми руками: +50% от базовой силы (у пешки 380) — сейчас +190", "in her bag: 50 % × 380")
+    -- Кольцо стойкости (3509) in her bag: her defence, her gear, the pawn's damage line (his are there too, to be
+    -- seen if they were taken)
+    W.rings[3509] = { special = 0, v1 = 0, v2 = 0, v3 = 0, fields = { PhysicalDefence = 50 } }
+    W.totals[PLAYER_ID] = { phys = 1645, magic = 1494.94 }
+    W.equipped[PLAYER_ID] = { augments = {}, items = {} }
+    W.totals[CASCA_ID] = { phys = 1325, magic = 1240 }
+    W.equipped[CASCA_ID] = { augments = {}, items = { [2001] = true, [3509] = true } }
+    W.hover = ring_hover(3509, "items", "pawn", CASCA_ID)
+    frame()
+    eq(W.hs.totals[#W.hs.totals], CASCA_ID, "her totals")
+    eq(W.hs.equipped[#W.hs.equipped], CASCA_ID, "her gear")
+    eq(hidden_text(), "+50 к физ. защите / защита 1275 → 1325 (+4%) / до -4% физ. урона по пешке", "on her")
+    -- the bag's owner unknown: no base read, the hint; no total line
+    local bases = #W.hs.base
+    W.hover = ring_hover(10224, "items", nil, nil)
+    frame()
+    eq(#W.hs.base, bases, "no base read")
+    eq(table.concat(hidden_lines(), " "), "голыми руками: +50% от базовой силы (число в скобках на экране статуса)",
+        "the hint, not his number")
+    W.hover = ring_hover(3509, "items", nil, nil)
+    frame()
+    eq(hidden_text(), "+50 к физ. защите", "no total line, not his")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
+test("a ring on the item screen of no one known is read with no vocation: its per-vocation line is left out",
+    function()
+    world({ settings = { language = "ru" } })
+    local M = load()
+    hidden_screens()
+    W.jobs = { player = 4, [CASCA_ID] = 5 }
+    local factors = { [4] = 0.4, [5] = 1.0 }
+    -- Кольцо ограбления (10231): each read noted by its vocation ("none" without one)
+    local reads = {}
+    W.rings[10231] = function(job)
+        reads[#reads + 1] = job or "none"
+        return { special = 57, v1 = 0, v2 = 0, v3 = 0, fields = {},
+                 pickpocket = { base = 1.5, factor = job and factors[job] or nil } }
+    end
+    W.hover = ring_hover(10231, "items", "pawn", CASCA_ID)
+    frame()
+    eq(reads[#reads], 5, "her bag: her vocation")
+    eq(hidden_lines()[2], "≈ шанс у текущего призвания ×1", "her factor")
+    W.hover = ring_hover(10231, "items", nil, nil)
+    frame()
+    eq(reads[#reads], "none", "no one known: no vocation, not his")
+    eq(hidden_text(), "≈ базовый шанс 1,5% забрать реликвию обычной атакой / ≈ другие моды не подтверждают · ? догадка",
+        "the base chance alone, no factor")
+    -- the equipment screen without a readable character: as before, the player's vocation
+    W.hover = ring_hover(10231, "equipment", nil, nil)
+    frame()
+    eq(reads[#reads], 4, "the equipment screen: unchanged")
     eq(hidden_lines()[2], "≈ шанс у текущего призвания ×0,4", "his factor")
     eq(M.info().errors, 0, "no error caught")
 end)

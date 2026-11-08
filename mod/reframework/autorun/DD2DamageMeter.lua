@@ -127,11 +127,12 @@
 -- hovered augment or ring gives in the game's own numbers, each line marked by how sure its reading is. Read and drawn
 -- in each frame the setting is on, the journal is closed and the player character is there, paused or not (the
 -- item and equipment screens pause the game); its screens are looked for at most every 0.5 s while none of them is
--- drawn. A ring's numbers are read by the vocation of the character the screen shows, a personal number
--- by that character's base (none while whose it is is unknown). The panel is built again only when the
--- thing hovered, whose it is, the game's numbers, the base's numbers or the language changed; drawn after the damage
--- numbers, under the settings window and the meter. Off, nothing of it is read or drawn, and the panel and the screens
--- found are forgotten (also when the world is new, with the game's numbers read).
+-- drawn. A ring's numbers are read by the vocation of the character the screen shows (by none on the item screen
+-- while whose it is is unknown), a personal number by that character's base (none while whose it is is unknown).
+-- The panel is built again only when the thing hovered, whose it is, the game's numbers, the base's numbers or the
+-- language changed; drawn after the damage numbers, under the settings window and the meter. Off, nothing of it is
+-- read or drawn, and the panel and the screens found are forgotten (also when the world is new, with the game's
+-- numbers read).
 -- While the game is paused in a menu (game/pause.lua: the pause menu, the map...; read once per frame while the
 -- journal is closed), the meter is hidden unless the settings window is open, and the enemy HP numbers, the buildup
 -- bars, the player's numbers, the enemy plate and the damage numbers are neither read nor drawn (the hidden-stats
@@ -1518,11 +1519,12 @@ end
 
 -- The hidden-stats panel this frame, paused or not: what is hovered on the guild's augments screen, the item screen or
 -- the equipment screen (HiddenScreens.current), its meaning (HiddenStatsData), the game's numbers for it
--- (HiddenStatsGame; a ring's by the vocation of the character the screen shows) and, for an entry with a
--- personal number, that character's base (HiddenScreens.base(chara_id), only whose when it cannot be read; none
--- while whose it is is unknown); for an entry with a total line, that character's totals and whether the thing is on
--- them (hidden_total; not read for the others). The Panel is built again only when one of them (the base and the
--- totals by their numbers) or the language changed, and drawn every frame by the game's description (Hover.anchor).
+-- (HiddenStatsGame; a ring's by the vocation of the character the screen shows, by none on the item screen while
+-- whose it is is unknown) and, for an entry with a personal number, that character's base
+-- (HiddenScreens.base(chara_id), only whose when it cannot be read; none while whose it is is unknown); for an entry
+-- with a total line, that character's totals and whether the thing is on them (hidden_total; not read for the
+-- others). The Panel is built again only when one of them (the base and the totals by their numbers) or the language
+-- changed, and drawn every frame by the game's description (Hover.anchor).
 -- Gives whether something was hovered and whether the panel was built.
 local function hidden_stats_frame(t)
     local hover = HiddenScreens.current(t)
@@ -1538,7 +1540,16 @@ local function hidden_stats_frame(t)
     elseif kind == "ring" then
         id = hover.id
         entry = HiddenStatsData.ring(id)
-        if entry and entry.lines then raw = HiddenStatsGame.ring(id, HiddenScreens.job(hover.chara_id)) end
+        if entry and entry.lines then
+            -- a ring of no one known on the item screen gets no vocation: its per-vocation lines are left out
+            -- rather than the player's shown, and a ring whose only line hangs on the vocation (Special 58, ring
+            -- 10232) then shows no panel at all. Elsewhere an unknown character still falls back to his, as before;
+            -- and a character known whose vocation cannot be read (its calculator has no Human) falls back to his
+            -- through HiddenScreens.job on every screen, the item screen now too (older behaviour, left as it is)
+            local job = nil
+            if hover.chara_id ~= nil or hover.screen ~= "items" then job = HiddenScreens.job(hover.chara_id) end
+            raw = HiddenStatsGame.ring(id, job)
+        end
     end
     local who, base, total = hover.who, nil, nil
     -- a base that cannot be read still says whose it is (a pawn's line of a ring without pawns gets no hint)

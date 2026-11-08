@@ -138,10 +138,19 @@ local function gui(name, comp, tree, o)
 end
 
 -- The item screen (ui060301_00) or the equipment-change screen (ui060401_00): o.item is the hovered item id (nil:
--- no Storage), o.chara the DispCharaId; o.tree replaces the elements (false: none).
+-- no Storage), o.owner its Storage's _CharaId, the owner of the bag it is in (default the player's id, as in his
+-- own bag; false: none; "raise": its read raises; 65535 in the storage chest), o.chara the DispCharaId; the item
+-- screen's CharaTab (s.tab) answers get_SelectedCharaID with o.selected, the character selected on the left (nil by
+-- default; "raise": the call raises); o.tree replaces the elements (false: none).
 local function item_screen(name, o)
     o = o or {}
+    if o.owner == nil then o.owner = PLAYER_ID end
     local storage = R.object("app.ItemDefine.StorageData", {}, { get_ItemId = function() return o.item end })
+    setmetatable(storage.fields, { __index = function(_, k)
+        if k ~= "_CharaId" then return nil end
+        if o.owner == "raise" then error("Invoke threw an exception") end
+        if o.owner ~= false then return o.owner end
+    end })
     local info = R.object("app.ItemInfo", {})
     setmetatable(info.fields, { __index = function(_, k)
         if k == "Storage" and o.item ~= nil then return storage end
@@ -150,6 +159,14 @@ local function item_screen(name, o)
     local grid = R.object("app.GUIBase.ItemGrid2Ref", { _ItemCtrl = ctrl })
     local comp = R.object("app." .. name, { ItemGrid = grid })
     setmetatable(comp.fields, { __index = function(_, k) if k == "DispCharaId" then return o.chara end end })
+    local tab = nil
+    if name == "ui060301_00" then
+        tab = R.object("app.GUIBase.CharaChangeRef", {}, { get_SelectedCharaID = function()
+            if o.selected == "raise" then error("Invoke threw an exception") end
+            return o.selected
+        end })
+        comp.fields.CharaTab = tab
+    end
     local s
     if o.tree == false then
         s = gui(name, comp, nil, o)
@@ -159,6 +176,7 @@ local function item_screen(name, o)
         s = gui(name, comp, tree, o)
         s.specs.info_name = specs.info_name
     end
+    s.tab = tab
     return s
 end
 
@@ -495,6 +513,215 @@ test("the items screen with 3502 hovered gives the ring, the player's, with a fi
     finite_anchor(h)
 end)
 
+test("the items screen: whose is the bag's owner, the hovered item's Storage._CharaId", function()
+    local HS = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = PLAYER_ID })
+    local h = HS.current(0)
+    eq(h.who, "player", "his own bag")
+    eq(h.chara_id, PLAYER_ID, "his id")
+    -- Casca's tab: a ring in her bag is hers
+    s.o.owner = CASCA_ID
+    h = HS.current(0.016)
+    eq(h.id, 3502, "the ring")
+    eq(h.screen, "items", "screen")
+    eq(h.who, "pawn", "Casca's bag")
+    eq(h.chara_id, CASCA_ID, "her id")
+    s.o.owner = PAWN2_ID
+    h = HS.current(0.032)
+    eq(h.who, "pawn", "the other pawn's bag")
+    eq(h.chara_id, PAWN2_ID, "her id")
+    -- a boxed CharacterID reads the same
+    s.o.owner = R.object("app.CharacterID", { value__ = CASCA_ID })
+    eq(HS.current(0.048).chara_id, CASCA_ID, "boxed")
+    -- back in his bag
+    s.o.owner = PLAYER_ID
+    h = HS.current(0.064)
+    eq(h.who, "player", "his again")
+    eq(h.chara_id, PLAYER_ID, "his id again")
+end)
+
+test("the items screen: an owner's id above 2^31 read as a signed 32-bit number is turned back", function()
+    local HS = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = PLAYER_ID - 0x100000000 })
+    local h = HS.current(0)
+    eq(h.chara_id, PLAYER_ID, "his id, 2891076981")
+    eq(h.who, "player", "his bag")
+    s.o.owner = CASCA_ID - 0x100000000
+    h = HS.current(0.016)
+    eq(h.chara_id, CASCA_ID, "her id, 2283028347")
+    eq(h.who, "pawn", "her bag")
+    s.o.owner = PLAYER_ID + 0.0
+    eq(HS.current(0.032).chara_id, PLAYER_ID, "a float with a whole value")
+end)
+
+test("the items screen: an owner that cannot be read or is not of the party, with no character selected, gives no "
+    .. "whose, never the player's", function()
+    local HS, Hook = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = false })
+    local function none(t, what)
+        local h = HS.current(t)
+        eq(h and h.id, 3502, what .. ": the ring still shown")
+        eq(h.who, nil, what .. ": who unknown")
+        eq(h.chara_id, nil, what .. ": chara_id unknown")
+        finite_anchor(h)
+    end
+    none(0, "no _CharaId")
+    s.o.owner = "raise"
+    none(0.016, "its read raises")
+    s.o.owner = 123456
+    none(0.032, "an id with no calculator")
+    s.o.owner = -5
+    none(0.048, "a signed id with no calculator")
+    s.o.owner = 0
+    none(0.064, "0")
+    s.o.owner = "2283028347"
+    none(0.08, "not a number")
+    -- a pawn whose calculator is gone (she left the party): not hers, and not the player's
+    table.remove(G.calcs, 2)
+    s.o.owner = CASCA_ID
+    none(0.096, "Casca without a calculator")
+    eq(Hook.info().errors, 0, "no error of the mod's own")
+end)
+
+test("the items screen: a party member's bag while the player's id cannot be read gives the id, who unknown",
+    function()
+    local HS = fresh()
+    G.player.chara_id = nil
+    local s = item_screen("ui060301_00", { item = 3502, owner = CASCA_ID })
+    local h = HS.current(0)
+    eq(h.chara_id, CASCA_ID, "her id")
+    eq(h.who, nil, "who unknown, as on the other screens")
+    s.o.owner = PLAYER_ID
+    h = HS.current(0.016)
+    eq(h.chara_id, PLAYER_ID, "his id")
+    eq(h.who, nil, "not taken as his without his id")
+end)
+
+test("a ring in a pawn's bag reads that pawn's base, totals, what she has on and her vocation", function()
+    local HS = fresh()
+    -- Casca a Warrior (5); the player a Thief (4)
+    G.calcs[2][2] = calculator({ def = 375.0, mdef = 440.0, atk = 410.0, matk = 440.0, job = 5,
+                                 total = { { 375.0, 0.0, 900.0 }, { 440.0, 0.0, 800.0 } }, equips = { 2001, 3509 } })
+    local s = item_screen("ui060301_00", { item = 3502, owner = CASCA_ID })
+    local h = HS.current(0)
+    local b = HS.base(h.chara_id)
+    eq(b.who, "pawn", "base.who")
+    near(b.phys_defence, 375, 1e-9, "her base defence, not his 380")
+    near(b.strength, 410, 1e-9, "her strength, not his 420")
+    local sums = HS.totals(h.chara_id)
+    near(sums.phys, 1275, 1e-9, "her defence: 375 + 0 + 900")
+    near(sums.magic, 1240, 1e-9, "her magick defence")
+    local on = HS.equipped(h.chara_id).items
+    eq(on[3509], true, "her gear")
+    eq(on[3502], nil, "3502 is not on her")
+    eq(HS.job(h.chara_id), 5, "her vocation")
+    -- the same ring in his bag: his
+    s.o.owner = PLAYER_ID
+    h = HS.current(0.016)
+    b = HS.base(h.chara_id)
+    eq(b.who, "player", "his base")
+    near(b.strength, 420, 1e-9, "his strength")
+    near(HS.totals(h.chara_id).phys, 1645, 1e-9, "his defence")
+    eq(HS.equipped(h.chara_id).items[3502], true, "3502 is on him")
+    eq(HS.job(h.chara_id), 4, "his vocation")
+end)
+
+test("the storage chest: an item of no one's (_CharaId 65535) is the character selected on the left's", function()
+    local HS = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = 65535, selected = PLAYER_ID })
+    local h = HS.current(0)
+    eq(h.who, "player", "the player selected")
+    eq(h.chara_id, PLAYER_ID, "his id")
+    near(HS.base(h.chara_id).strength, 420, 1e-9, "his base")
+    near(HS.totals(h.chara_id).phys, 1645, 1e-9, "his defence")
+    -- C: Casca selected
+    s.o.selected = CASCA_ID
+    h = HS.current(0.016)
+    eq(h.who, "pawn", "Casca selected")
+    eq(h.chara_id, CASCA_ID, "her id")
+    near(HS.base(h.chara_id).strength, 410, 1e-9, "her base")
+    near(HS.totals(h.chara_id).phys, 1275, 1e-9, "her defence")
+    -- read as a signed 32-bit number, or boxed: the same ids
+    s.o.selected = CASCA_ID - 0x100000000
+    eq(HS.current(0.032).chara_id, CASCA_ID, "signed")
+    s.o.selected = R.object("app.CharacterID", { value__ = PLAYER_ID })
+    eq(HS.current(0.048).chara_id, PLAYER_ID, "boxed")
+    -- an item whose _CharaId cannot be read: the selected one too
+    s.o.owner = false
+    eq(HS.current(0.064).chara_id, PLAYER_ID, "no _CharaId")
+end)
+
+test("the storage chest: a selected character that cannot be read or is not of the party gives no whose",
+    function()
+    local HS, Hook = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = 65535 })
+    local function none(t, what)
+        local h = HS.current(t)
+        eq(h and h.id, 3502, what .. ": the ring still shown")
+        eq(h.who, nil, what .. ": who unknown")
+        eq(h.chara_id, nil, what .. ": chara_id unknown")
+    end
+    none(0, "nothing selected")
+    s.o.selected = "raise"
+    none(0.016, "get_SelectedCharaID raises")
+    s.o.selected = 123456
+    none(0.032, "an id with no calculator")
+    s.o.selected = 65535
+    none(0.048, "the chest's own id")
+    s.tab.poison = true
+    s.o.selected = PLAYER_ID
+    none(0.064, "the tab raises")
+    s.comp.fields.CharaTab = nil
+    none(0.08, "no CharaTab")
+    eq(Hook.info().errors, 0, "no error of the mod's own")
+end)
+
+test("the items screen: a party owner in Storage._CharaId wins over another character selected on the left",
+    function()
+    local HS = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = CASCA_ID, selected = PLAYER_ID })
+    local h = HS.current(0)
+    eq(h.chara_id, CASCA_ID, "her bag, the player selected: hers")
+    eq(h.who, "pawn", "a pawn's")
+    s.o.owner, s.o.selected = PLAYER_ID, CASCA_ID
+    h = HS.current(0.016)
+    eq(h.chara_id, PLAYER_ID, "his bag, Casca selected: his")
+    eq(h.who, "player", "the player's")
+end)
+
+test("the items screen: the character selected is asked only when the item is of no one in the party", function()
+    local HS = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = CASCA_ID, selected = PLAYER_ID })
+    local function asks() return #R.calls_of("get_SelectedCharaID") end
+    local before = asks()
+    eq(HS.current(0).chara_id, CASCA_ID, "her bag")
+    eq(asks() - before, 0, "a bag's owner: the selection not asked")
+    s.o.owner = 65535
+    before = asks()
+    eq(HS.current(0.016).chara_id, PLAYER_ID, "the chest: the player selected")
+    eq(asks() - before, 1, "the chest: asked once")
+end)
+
+test("the items screen: the player's own id without his calculator is not taken, nothing selected", function()
+    local HS = fresh()
+    table.remove(G.calcs, 1)
+    item_screen("ui060301_00", { item = 3502, owner = PLAYER_ID })
+    local h = HS.current(0)
+    eq(h and h.id, 3502, "the ring still shown")
+    eq(h.chara_id, nil, "not taken as his: no calculator")
+    eq(h.who, nil, "who unknown")
+end)
+
+test("the items screen: the storage row is read anew when the same ring is hovered in another bag", function()
+    local HS = fresh()
+    local s = item_screen("ui060301_00", { item = 3502, owner = PLAYER_ID })
+    near(HS.current(0).anchor.y, 423, 1e-9, "his bag")
+    s.specs.PNL_Party00.children[1].pos = { 1233, 400 }
+    near(HS.current(0.016).anchor.y, 423, 1e-9, "the same hover: the row as read for it")
+    s.o.owner = CASCA_ID
+    near(HS.current(0.032).anchor.y, 440, 1e-9, "her bag: another hover, the row read anew")
+end)
+
 test("the items screen's anchor: txt_Name's x, the storage row's y + 40, PNL_ItemInfo's width", function()
     local HS = fresh()
     local s = item_screen("ui060301_00", { item = 3502 })
@@ -798,6 +1025,16 @@ test("the equipment screen: the hovered ring, and whose by DispCharaId", functio
     -- a boxed CharacterID reads the same
     s.o.chara = R.object("app.CharacterID", { value__ = PAWN2_ID })
     eq(HS.current(0.032).chara_id, PAWN2_ID, "boxed")
+end)
+
+test("the equipment screen: whose stays DispCharaId, whatever bag the item's Storage names", function()
+    local HS = fresh()
+    local s = item_screen("ui060401_00", { item = 3518, chara = CASCA_ID, owner = PLAYER_ID })
+    local h = HS.current(0)
+    eq(h.who, "pawn", "Casca shown")
+    eq(h.chara_id, CASCA_ID, "her id")
+    s.o.owner = false
+    eq(HS.current(0.016).chara_id, CASCA_ID, "no owner: still hers")
 end)
 
 test("the equipment screen without a readable character: who and chara_id nil, the ring still shown", function()

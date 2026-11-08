@@ -7,6 +7,9 @@
 - The enemy's health at the top of the meter now matches the number by the boss's bar (or over the enemy's head)
   frame for frame. It used to lag a hit or more behind. The fight summary and the journal show the health that
   number last showed.
+- Hidden stats: on the item screen, a ring in a pawn's bag is now counted for that pawn (its base stats, defense,
+  vocation and whether it has the ring on) instead of for you; a ring in the storage chest is counted for the
+  character selected on the left.
 - Hidden stats: the rings that only work without pawns no longer give a pawn the status-screen hint when that pawn's
   stats can't be read.
 - Hidden stats: the line under a defense total now reads "up to -10% physical damage taken" instead of "≈ -10%

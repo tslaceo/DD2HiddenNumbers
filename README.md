@@ -217,12 +217,13 @@ panel with a ≈ or ? line ends with a grey line that repeats this. "no number f
 should have a number and none was found.
 
 For an augment or ring that adds a share of a base stat, the line also says what that comes to for the character the
-screen shows, you or a pawn (not for a pawn on a ring that works only without pawns). When the mod cannot read that
-character's base, the line points to the number in brackets on the status screen instead. A line that adds to
-defense or magick defense is followed by what it does to that character's total on the status screen, with or
-without it ("defense 1486 → 1645 (+11%)"), and by the most it can cut from the damage that character takes ("up to
--10% physical damage taken"). The real cut is a bit smaller: the game's damage formula also depends on the enemy,
-and the mod leaves that part out. A ring whose numbers depend on the vocation is read for the vocation of the
+screen shows, you or a pawn (not for a pawn on a ring that works only without pawns). On the item screen that is
+whoever's bag the ring is in; for a ring in the storage chest, the character selected on the left. When the mod
+cannot read that character's base, the line points to the number in brackets on the status screen instead. A line
+that adds to defense or magick defense is followed by what it does to that character's total on the status screen,
+with or without it ("defense 1486 → 1645 (+11%)"), and by the most it can cut from the damage that character takes
+("up to -10% physical damage taken"). The real cut is a bit smaller: the game's damage formula also depends on the
+enemy, and the mod leaves that part out. A ring whose numbers depend on the vocation is read for the vocation of the
 character the screen shows.
 
 ## Help check the hidden stats
