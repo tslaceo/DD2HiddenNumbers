@@ -1444,11 +1444,11 @@ end
 -- The hidden-stats panel this frame, paused or not: what is hovered on the guild's augments screen, the item screen or
 -- the equipment screen (HiddenScreens.current), its meaning (HiddenStatsData), the game's numbers for it
 -- (HiddenStatsGame; a ring's by the vocation of the character the screen shows) and, for an entry with a
--- personal number, that character's base (HiddenScreens.base(chara_id); none while whose it is is unknown);
--- for an entry with a total line, that character's totals and whether the thing is on them (hidden_total; not
--- read for the others). The Panel is built again only when one of them (the base and the totals by their numbers) or
--- the language changed, and drawn every frame by the game's description (Hover.anchor). Gives whether something was
--- hovered and whether the panel was built.
+-- personal number, that character's base (HiddenScreens.base(chara_id), only whose when it cannot be read; none
+-- while whose it is is unknown); for an entry with a total line, that character's totals and whether the thing is on
+-- them (hidden_total; not read for the others). The Panel is built again only when one of them (the base and the
+-- totals by their numbers) or the language changed, and drawn every frame by the game's description (Hover.anchor).
+-- Gives whether something was hovered and whether the panel was built.
 local function hidden_stats_frame(t)
     local hover = HiddenScreens.current(t)
     if hover == nil then
@@ -1466,7 +1466,8 @@ local function hidden_stats_frame(t)
         if entry and entry.lines then raw = HiddenStatsGame.ring(id, HiddenScreens.job(hover.chara_id)) end
     end
     local who, base, total = hover.who, nil, nil
-    if who ~= nil and wants_base(entry) then base = HiddenScreens.base(hover.chara_id) end
+    -- a base that cannot be read still says whose it is (a pawn's line of a ring without pawns gets no hint)
+    if who ~= nil and wants_base(entry) then base = HiddenScreens.base(hover.chara_id) or { who = who } end
     if wants_total(entry) then total = hidden_total(hover) end
     local lang = i18n.lang()
     local V, built = S.hidden_view, false

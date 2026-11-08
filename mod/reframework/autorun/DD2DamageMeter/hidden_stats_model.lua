@@ -5,7 +5,7 @@
 --   HiddenStatsModel.panel(entry, raw, base, total) -> Panel | nil
 --     entry: HiddenStatsData.augment / .ring's Entry; raw: the game's AugmentRaw / RingRaw (nil when not read);
 --     base: { who = "player" | "pawn", phys_defence, magic_defence, strength, magic } | nil, the numbers in brackets
---       on the status screen of the one whose augments or ring the screen shows
+--       on the status screen of the one whose augments or ring the screen shows (only who when they cannot be read)
 --     total: { phys, magic, equipped, who } | nil, for the total lines: that one's defence and magick
 --       defence as the status screen shows them before its floor (each nil when unknown); equipped: whether the
 --       hovered augment or ring is on that one (true / false, else unknown); who: "player" | "pawn" as Hover's (else

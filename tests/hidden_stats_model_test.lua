@@ -823,6 +823,11 @@ test("no-pawn and bare-handed rings (44, 45, 47, 50, 51): the condition first, t
         "plain:без пешек: +20% от базовой защиты | plain:без пешек: +20% от базовой маг. защиты", "a pawn's: 47")
     eq(ring(10224, 50, 50, PAWN_BASE), "plain:голыми руками: +50% от базовой силы (у пешки 380) — сейчас +190",
         "a pawn's: 50 keeps it")
+    -- a pawn's base whose numbers cannot be read: still no hint on these, the hint on the bare-handed one
+    local PAWN_UNREAD = { who = "pawn" }
+    eq(ring(10218, 44, 20, PAWN_UNREAD), "plain:без пешек: +20% от базовой силы", "a pawn's, unread: 44")
+    eq(ring(10224, 50, 50, PAWN_UNREAD), "plain:голыми руками: +50% от базовой силы (число в скобках на экране статуса)",
+        "a pawn's, unread: 50 gets the hint")
     for _, id in ipairs({ 10218, 10219, 10221 }) do
         for i, l in ipairs(Data.ring(id).lines) do eq(l.no_pawn, true, id .. " line " .. i .. " no_pawn") end
     end

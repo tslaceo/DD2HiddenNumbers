@@ -6615,6 +6615,20 @@ test("a ring with a personal number reads the base of the one the screen shows",
     W.hover = ring_hover(10218, "equipment", "pawn", CASCA_ID)
     frame()
     eq(hidden_text(), "без пешек: +20% от базовой силы", "no personal number for a pawn")
+    -- her base cannot be read: still a pawn's, so the ring without pawns gets no hint either; the bare-handed one
+    -- gets the hint in place of her number
+    local casca = W.bases[CASCA_ID]
+    W.bases[CASCA_ID] = nil
+    frame()
+    eq(W.hs.base[#W.hs.base], CASCA_ID, "her base asked")
+    eq(hidden_text(), "без пешек: +20% от базовой силы", "unread base, a pawn: no hint")
+    W.hover = ring_hover(10224, "equipment", "pawn", CASCA_ID)
+    frame()
+    eq(table.concat(hidden_lines(), " "), "голыми руками: +50% от базовой силы (число в скобках на экране статуса)",
+        "unread base: the hint")
+    W.bases[CASCA_ID] = casca
+    frame()
+    eq(hidden_text(), "голыми руками: +50% от базовой силы (у пешки 380) — сейчас +190", "read again: her number")
     -- whose unknown: no base read, the hint
     local asked = #W.hs.base
     W.hover = ring_hover(10218, "equipment", nil, CASCA_ID)
