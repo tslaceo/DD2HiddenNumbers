@@ -100,17 +100,22 @@
 --   HiddenScreens.forget()  forgets the screens found and their elements, not the texts read; the next call looks at
 --     once (the world may be going, a scene change, no player character)
 --   HiddenScreens.kept() -> the number of screens kept
---   HiddenScreens.gone() -> the number of screens kept that were dropped because their get_DrawSelf raised (the
---     game destroyed them under the mod), since the mod was loaded; forget and reset leave it
+--   HiddenScreens.gone() -> the number of screens kept that were dropped because their get_Valid or get_DrawSelf
+--     raised (the game destroyed them under the mod), since the mod was loaded; forget and reset leave it
+--   HiddenScreens.invalid() -> the number of screens kept that were dropped because their get_Valid gave false (the
+--     game destroyed them: a menu closed), since the mod was loaded; forget and reset leave it
 --
 -- Cost. While none of the screens kept is drawn, the scene's GUIs (via.SceneManager get_CurrentScene,
 -- findComponents(via.gui.GUI), at most MAX_GUIS) are looked through at most once every SCAN_EVERY seconds; a look keeps
 -- each of the three it finds (of two of one name, the drawn one), and a screen found again at the same address keeps
 -- what was found under it. A kept screen stays while it exists: it is forgotten with everything under it when the
 -- world may be going (the mod calls forget at each scene-type change and in the first frame without a player
--- character, and does not call current in a frame without one), and dropped when a look does not find it or its
--- get_DrawSelf raises (the game destroyed it under the mod: the last guard, counted by gone). Its elements are read
--- only in a frame its get_DrawSelf said it is drawn. The hovered thing, whose and the anchor are read on every call.
+-- character, and does not call current in a frame without one), and dropped when a look does not find it, when its
+-- GameObject's get_Valid (via.GameObject's, looked up once: Safe.valid; asked right before its get_DrawSelf, so one
+-- call more a kept screen read) gives false (the game destroyed it: counted by invalid, get_DrawSelf not called), or
+-- when its get_Valid or get_DrawSelf raises (the game destroyed it under the mod: the last guard, counted by gone).
+-- Without a get_Valid in the game, get_DrawSelf alone, as before. Its elements are read only in a frame its
+-- get_DrawSelf said it is drawn. The hovered thing, whose and the anchor are read on every call.
 -- The item screens' description elements and the guild's header are found under the GUI's get_View by their names
 -- as direct children, the first time the screen is read, and again at most every SCAN_EVERY seconds while one is
 -- missing or its position cannot be read; the scroll lists' rows are found the same way each time they are read
@@ -184,7 +189,9 @@ local looked_at = nil -- t of the last look through the GUIs
 local by_text = {}   -- normalised description -> augment name, false when two augments of one language share it;
                      -- every language read
 local read_at = nil  -- t of the last read of the descriptions
-local gone = 0       -- screens kept that were dropped because their get_DrawSelf raised, since the mod was loaded
+local gone = 0       -- screens kept that were dropped because their get_Valid or get_DrawSelf raised, since the mod
+                     -- was loaded
+local invalid = 0    -- screens kept that were dropped because their get_Valid gave false, since the mod was loaded
 local drawn_last = nil -- the screen kept that the last call found drawn (its scroll-list numbers are read anew
                        -- when another one, or none, was)
 
@@ -204,6 +211,10 @@ end
 
 function HiddenScreens.gone()
     return gone
+end
+
+function HiddenScreens.invalid()
+    return invalid
 end
 
 local function finite(v)
@@ -287,17 +298,26 @@ end
 
 local function m_call(obj, name) return obj:call(name) end
 
--- The first kept screen drawn now; one whose get_DrawSelf raises is gone and dropped (the last guard, counted).
+-- The first kept screen drawn now. Its GameObject is asked get_Valid first (Safe.valid): one no longer valid is
+-- dropped without a read (counted by invalid), one whose get_Valid or get_DrawSelf raises is gone and dropped (the last
+-- guard, counted by gone).
 local function drawn_screen()
     for _, name in ipairs(ORDER) do
         local s = screens[name]
         if s then
-            local ok, drawn = pcall(m_call, s.go, "get_DrawSelf")
-            if not ok then
+            local valid = Safe.valid(s.go)
+            if valid == false then
                 screens[name] = nil
-                gone = gone + 1
-            elseif drawn == true then
-                return s
+                invalid = invalid + 1
+            else
+                local ok, drawn = false, nil
+                if valid then ok, drawn = pcall(m_call, s.go, "get_DrawSelf") end
+                if not ok then
+                    screens[name] = nil
+                    gone = gone + 1
+                elseif drawn == true then
+                    return s
+                end
             end
         end
     end

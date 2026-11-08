@@ -475,9 +475,10 @@ log, `re2_framework_log.txt` in the game folder, such as its name and version wh
   the window during a fight (and under the summary), and always in the mod's part of REFramework's menu; the mod
   keeps doing what it still can. REFramework's log (`re2_framework_log.txt` in the game folder) lists the missing
   methods.
-- REFramework's log can also show an "Internal game exception" error that names get_DrawSelf when a menu closes or
-  an enemy dies or disappears. That is the game reporting that a screen or health bar the mod was watching is gone;
-  the mod catches it and goes on, and it does no harm.
+- REFramework's log can now and then show an "Internal game exception" error that names get_DrawSelf when a menu
+  closes or an enemy dies or disappears. That is the game reporting that a screen or health bar the mod was watching
+  is gone. The mod checks for that before it looks, so the line should be rare; when it does show up, the mod catches
+  it and goes on, and it does no harm.
 - Loading a save ends the fight in progress.
 - The summary appears 3 seconds after the battle music stops, since a fight ends 3 seconds after the game's battle
   does. Those 3 seconds are not in the fight's length.

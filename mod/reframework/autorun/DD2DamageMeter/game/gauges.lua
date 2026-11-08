@@ -11,14 +11,17 @@
 -- and its size in its own units, as the boss's base (as probed: the
 -- s9g_Line and rec_Line elsewhere under PNL_Hp and PNL_Sp are the fills, as long as the HP or stamina now, and the
 -- s9g_Base under PNL_Whiteline follows the max as cut by damage). A bar is on screen exactly while its GameObject's
--- DrawSelf is true. Every game access under Safe or pcall.
+-- DrawSelf is true; a kept one is asked its Valid first. Every game access under Safe or pcall.
 --
 --   gauges.shown(t) -> { { character, x, y } }   the bars drawn now whose IsHostile is true, in the scene's order;
 --     x, y the bar's centre in GUI space. The current scene's GUIs are looked through when the last look is
 --     RESCAN_EVERY seconds old (t: seconds), and the bars found are kept until the next look; between the looks
---     only the kept ones are read. A bar without its character or its position this frame is left out. A kept bar
---     whose reading raises is dropped until the next look: without an error when a game call raised (the game
---     destroyed it since the look: counted by gauges.gone), else Hook.fail counts the error.
+--     only the kept ones are read. A bar without its character or its position this frame is left out. Each kept
+--     bar's GameObject is asked get_Valid (via.GameObject's, looked up once: Safe.valid) right before its get_DrawSelf,
+--     one call more a kept bar read: one that gives false is dropped until the next look without get_DrawSelf
+--     (counted by gauges.invalid); without a get_Valid in the game, get_DrawSelf alone, as before. A kept bar whose
+--     reading raises is dropped until the next look: without an error when a game call raised, get_Valid's included
+--     (the game destroyed it since the look: counted by gauges.gone), else Hook.fail counts the error.
 --   gauges.boss(t) -> { character, hc, x, y, width } | nil   the boss bar while it is drawn and has its boss, found
 --     by the same look (the scene's first one). The looks take it only once gauges.boss was called since the last
 --     reset; until then they read nothing of it, and the first call looks at once. character: the boss's
@@ -28,8 +31,8 @@
 --     × H / 1080). x, y and width are nil when its base element is not found or does not give a finite position and
 --     size this frame. The base is looked for under All (first child, next sibling: at most MAX_ELEMENTS elements,
 --     MAX_DEPTH levels down) the first time the bar is drawn, and kept while the looks find the same GameObject; one
---     not found is looked for again after the next look. A boss bar whose reading raises is dropped until the next
---     look, as a bar over a head.
+--     not found is looked for again after the next look. A boss bar no longer valid or whose reading raises is
+--     dropped until the next look, as a bar over a head.
 --   gauges.player(t) -> { hp = { x, y, width, height } | nil, sp = { ... } | nil } | nil   the player's HUD while it
 --     is drawn, found by the same look (the scene's first one) and taken by the looks only once gauges.player was
 --     called since the last reset, as the boss bar. hp: the HP bar's background, sp: the stamina bar's; x, y its
@@ -42,8 +45,10 @@
 --     one of these names outside the chain above it (a PNL_Hp outside PNL_Playergauge/PNL_All, an s9g_Base outside
 --     PNL_Hpbg/PNL_Mhpbg) is never taken. PNL_All and the two backgrounds are looked for the first time the HUD is
 --     drawn and kept while the looks find the same GameObject; one not found is looked for again after the next look.
---     A HUD whose reading raises is dropped until the next look, as a bar over a head.
+--     A HUD no longer valid or whose reading raises is dropped until the next look, as a bar over a head.
 --   gauges.gone() -> the number of kept bars dropped because a game call on them raised, since the mod was loaded
+--   gauges.invalid() -> the number of kept bars dropped because their GameObject's get_Valid gave false, since the
+--     mod was loaded
 --   gauges.count() -> the number of overhead bars kept
 --   gauges.reset()   forgets the kept bars, the boss bar and the player's HUD: the next call looks again (a new world;
 --     a setting switched off); the next calls of gauges.boss and gauges.player look again on their own
@@ -83,6 +88,7 @@ local player = nil       -- { gui, go, addr, all, hp, sp } of the player's HUD; 
 local player_wanted = false -- gauges.player was called since the last reset: the looks take the player's HUD
 local looked_at = nil    -- t of the last look
 local gone = 0           -- kept objects dropped because a game call on them raised
+local invalid = 0        -- kept objects dropped because their GameObject's get_Valid gave false
 
 function Gauges.reset()
     bars, boss, boss_wanted, player, player_wanted, looked_at = {}, nil, false, nil, false, nil
@@ -146,8 +152,12 @@ end
 
 -- The game calls on a kept object between the looks. One that raises (the game throws on an object it destroyed
 -- since the look: "Invoke threw an exception") raises GONE, and the object is dropped until the next look without
--- counting an error; any other error in a read is the mod's own and is counted.
+-- counting an error; any other error in a read is the mod's own and is counted. Before its get_DrawSelf, a kept
+-- GameObject is asked get_Valid (Safe.valid): false raises INVALID, and the object is dropped the same way without
+-- get_DrawSelf being called (counted by gauges.invalid); a get_Valid that raises is GONE; without a get_Valid in the
+-- game, get_DrawSelf alone, as before.
 local GONE = setmetatable({}, { __tostring = function() return "gone since the look" end })
+local INVALID = setmetatable({}, { __tostring = function() return "no longer valid" end })
 local function m_call(obj, name) return obj:call(name) end
 local function m_field(obj, name) return obj:get_field(name) end
 
@@ -163,9 +173,17 @@ local function field(obj, name)
     return v
 end
 
+-- The kept GameObject's get_DrawSelf, asked get_Valid first: INVALID when that gives false, GONE when either raises.
+local function drawn(go)
+    local valid = Safe.valid(go)
+    if valid == false then error(INVALID, 0) end
+    if valid == nil then error(GONE, 0) end
+    return get(go, "get_DrawSelf") == true
+end
+
 -- The bar as shown now, nil when it is not drawn, not hostile, or without its character or position.
 local function read(bar)
-    if get(bar.go, "get_DrawSelf") ~= true then return nil end
+    if not drawn(bar.go) then return nil end
     local comp = bar.comp
     if field(comp, "IsHostile") ~= true then return nil end
     local character = field(comp, "CompChara")
@@ -233,7 +251,7 @@ end
 
 -- The boss bar as shown now (see Gauges.boss), nil when it is not drawn or has no boss.
 local function read_boss(b)
-    if get(b.go, "get_DrawSelf") ~= true then return nil end
+    if not drawn(b.go) then return nil end
     local hc = field(b.comp, "TargetHitCtrl")
     local character = boss_character(b.comp, hc)
     if character == nil then return nil end
@@ -249,7 +267,7 @@ end
 
 -- The player's HUD as shown now (see Gauges.player), nil when it is not drawn.
 local function read_player(p)
-    if get(p.go, "get_DrawSelf") ~= true then return nil end
+    if not drawn(p.go) then return nil end
     if p.hp == nil or p.sp == nil then
         if p.all == nil then
             local view = get(p.gui, "get_View")
@@ -284,9 +302,15 @@ local function refresh(t)
     player = keep(p, kept_player, { "all", "hp", "sp" })
 end
 
--- A kept object whose read raised: gone since the look, or the mod's own error (counted).
+-- A kept object whose read raised: no longer valid, gone since the look, or the mod's own error (counted).
 local function dropped(err)
-    if err == GONE then gone = gone + 1 else Hook.fail("gauges", err) end
+    if err == INVALID then
+        invalid = invalid + 1
+    elseif err == GONE then
+        gone = gone + 1
+    else
+        Hook.fail("gauges", err)
+    end
 end
 
 function Gauges.shown(t)
@@ -332,6 +356,10 @@ end
 
 function Gauges.gone()
     return gone
+end
+
+function Gauges.invalid()
+    return invalid
 end
 
 return Gauges

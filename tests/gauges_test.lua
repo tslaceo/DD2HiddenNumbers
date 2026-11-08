@@ -1041,4 +1041,147 @@ test("forget drops the bars, the boss bar and the HUD kept, not what was asked f
     eq(h2 ~= nil, true, "the new HUD")
 end)
 
+-- get_Valid before get_DrawSelf ---------------------------------------------------------------------------------------
+
+-- via.GameObject's get_Valid as the game has it (game/safe.lua looks it up once): the GameObject's go.valid, true
+-- when not set ("raise", or a poisoned GameObject: the call raises).
+local function declare_valid()
+    R.method("via.GameObject", "get_Valid", function(go)
+        if go.valid == "raise" or go.poison then error("Invoke threw an exception") end
+        if go.valid == nil then return true end
+        return go.valid
+    end)
+end
+
+-- The calls of `sig` made on `obj`.
+local function calls_on(obj, sig)
+    local n = 0
+    for _, c in ipairs(R.calls_of(sig)) do
+        if c.this == obj then n = n + 1 end
+    end
+    return n
+end
+
+test("get_Valid true: the bars read as before, each kept bar's GameObject asked it once a read, before get_DrawSelf",
+    function()
+    local gauges, Hook = fresh()
+    declare_valid()
+    local a = bar({ x = 100 })
+    local b = bar({ x = 200, drawn = false })
+    local list = gauges.shown(1)
+    eq(#list, 1, "the drawn one"); eq(list[1].character, a.chara, "a")
+    gauges.shown(1.02)
+    eq(calls_on(a.go, "get_Valid"), 2, "a asked once a read"); eq(calls_on(b.go, "get_Valid"), 2, "b too")
+    eq(calls_on(a.go, "get_DrawSelf"), 2, "then get_DrawSelf, as before")
+    -- in that order
+    local order = {}
+    for _, c in ipairs(R.calls) do
+        if c.this == a.go and (c.sig == "get_Valid" or c.sig == "get_DrawSelf") then order[#order + 1] = c.sig end
+    end
+    eq(table.concat(order, " "), "get_Valid get_DrawSelf get_Valid get_DrawSelf", "get_Valid first")
+    b.o.drawn = true
+    eq(#gauges.shown(1.04), 2, "b drawn now")
+    eq(gauges.invalid(), 0, "nothing dropped"); eq(gauges.gone(), 0, "nothing gone")
+    eq(Hook.info().errors, 0, "no error")
+end)
+
+test("a kept bar whose get_Valid gives false is dropped until the next look, its get_DrawSelf not called", function()
+    local gauges, Hook = fresh()
+    declare_valid()
+    local a = bar({ x = 100 })
+    local b = bar({ x = 200 })
+    eq(#gauges.shown(5), 2, "two bars")
+    -- the enemy despawned: the game destroyed its bar
+    a.go.valid = false
+    local draws, from = calls_on(a.go, "get_DrawSelf"), #R.calls
+    local list = gauges.shown(5.02)
+    eq(#list, 1, "the other one still comes"); eq(list[1].character, b.chara, "b")
+    eq(calls_on(a.go, "get_DrawSelf"), draws, "its get_DrawSelf not called")
+    eq(asked({ a.comp, a.panel, a.gui }, from), 0, "nor anything else of it")
+    eq(gauges.invalid(), 1, "counted as no longer valid"); eq(gauges.gone(), 0, "not as gone")
+    eq(Hook.info().errors, 0, "no error")
+    eq(gauges.count(), 1, "dropped")
+    local asks = calls_on(a.go, "get_Valid")
+    for i = 1, 20 do gauges.shown(5.02 + i * 0.02) end
+    eq(calls_on(a.go, "get_Valid"), asks, "not asked again before the next look")
+    eq(gauges.invalid(), 1, "once")
+    -- still listed in the scene at the next look: taken and dropped again, once a look at most
+    gauges.shown(6)
+    eq(gauges.invalid(), 2, "once more at the next look")
+    -- gone from the scene: not read again
+    table.remove(G.guis, 1)
+    eq(#gauges.shown(7), 1, "b")
+    eq(gauges.invalid(), 2, "not found, not read")
+    eq(calls_on(a.go, "get_DrawSelf"), draws, "its get_DrawSelf never called once it was no longer valid")
+    eq(Hook.info().errors, 0, "never an error")
+end)
+
+test("a kept bar whose get_Valid raises is dropped like a raise: counted as gone, its get_DrawSelf not called",
+    function()
+    local gauges, Hook = fresh()
+    declare_valid()
+    local a = bar({ x = 100 })
+    local b = bar({ x = 200 })
+    eq(#gauges.shown(5), 2, "two bars")
+    a.go.valid = "raise"
+    local draws = calls_on(a.go, "get_DrawSelf")
+    local list = gauges.shown(5.02)
+    eq(#list, 1, "the other one still comes"); eq(list[1].character, b.chara, "b")
+    eq(calls_on(a.go, "get_DrawSelf"), draws, "its get_DrawSelf not called")
+    eq(gauges.gone(), 1, "counted as gone"); eq(gauges.invalid(), 0, "not as no longer valid")
+    eq(Hook.info().errors, 0, "no error")
+    for i = 1, 20 do gauges.shown(5.02 + i * 0.02) end
+    eq(gauges.gone(), 1, "not read again before the next look")
+end)
+
+test("without get_Valid in the game: get_DrawSelf alone, as before; one that raises is still the last guard",
+    function()
+    local gauges, Hook = fresh({ boss = true })
+    local a = bar({ x = 100 })
+    local b = boss()
+    local h = hud()
+    eq(#gauges.shown(5), 1, "the bar"); eq(gauges.boss(5) ~= nil, true, "the boss bar")
+    eq(gauges.player(5) ~= nil, true, "the HUD")
+    eq(#R.calls_of("get_Valid"), 0, "no get_Valid asked")
+    eq(calls_on(a.go, "get_DrawSelf"), 1, "get_DrawSelf read"); eq(calls_on(b.go, "get_DrawSelf"), 1, "boss")
+    eq(calls_on(h.go, "get_DrawSelf"), 1, "HUD")
+    a.go.methods.get_DrawSelf = function() error("Invoke threw an exception") end
+    eq(#gauges.shown(5.02), 0, "dropped")
+    eq(gauges.gone(), 1, "counted as gone"); eq(gauges.invalid(), 0, "not as no longer valid")
+    eq(Hook.info().errors, 0, "no error")
+end)
+
+test("the boss bar and the HUD: get_Valid false drops them until the next look without get_DrawSelf; raising, gone",
+    function()
+    local gauges, Hook = fresh({ boss = true })
+    declare_valid()
+    local b = boss()
+    local h = hud()
+    eq(gauges.boss(5) ~= nil, true, "the boss bar"); eq(gauges.player(5) ~= nil, true, "the HUD")
+    eq(calls_on(b.go, "get_Valid"), 1, "the boss bar asked"); eq(calls_on(h.go, "get_Valid"), 1, "the HUD asked")
+    -- the boss gone: its bar destroyed
+    b.go.valid = false
+    local draws = calls_on(b.go, "get_DrawSelf")
+    eq(gauges.boss(5.02), nil, "no boss bar")
+    eq(calls_on(b.go, "get_DrawSelf"), draws, "its get_DrawSelf not called")
+    eq(gauges.invalid(), 1, "counted as no longer valid"); eq(gauges.gone(), 0, "not as gone")
+    for i = 1, 10 do gauges.boss(5.02 + i * 0.02) end
+    eq(calls_on(b.go, "get_Valid"), 2, "not asked again before the next look")
+    -- the HUD destroyed (a load), the same
+    h.go.valid = false
+    draws = calls_on(h.go, "get_DrawSelf")
+    eq(gauges.player(5.5), nil, "no HUD")
+    eq(calls_on(h.go, "get_DrawSelf"), draws, "its get_DrawSelf not called")
+    eq(gauges.invalid(), 2, "counted"); eq(gauges.gone(), 0, "not as gone")
+    -- a get_Valid that raises: gone
+    G.guis = {}
+    local b2, h2 = boss(), hud()
+    eq(gauges.boss(6) ~= nil, true, "a new boss bar at the next look"); eq(gauges.player(6) ~= nil, true, "a new HUD")
+    b2.go.valid, h2.go.valid = "raise", "raise"
+    eq(gauges.boss(6.02), nil, "dropped"); eq(gauges.player(6.02), nil, "dropped")
+    eq(gauges.gone(), 2, "both counted as gone"); eq(gauges.invalid(), 2, "not as no longer valid")
+    eq(calls_on(b2.go, "get_DrawSelf") + calls_on(h2.go, "get_DrawSelf"), 2, "only the first read's get_DrawSelf")
+    eq(Hook.info().errors, 0, "never an error")
+end)
+
 T.finish()

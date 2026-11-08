@@ -59,13 +59,36 @@ function Safe.type(name)
     return Safe.try(s_type, name)
 end
 
--- A static method called as `type:get_method(sig):call(nil, ...)`; `sig` needs ", " between parameter types.
-function Safe.static(type_name, sig, ...)
+-- The method `type:get_method(sig)`, nil when the type or the method is missing; `sig` needs ", " between parameter
+-- types (or is the bare name).
+function Safe.method(type_name, sig)
     local td = Safe.type(type_name)
     if td == nil then return nil end
-    local method = Safe.try(t_method, td, sig)
+    return Safe.try(t_method, td, sig)
+end
+
+-- A static method called as `type:get_method(sig):call(nil, ...)`; `sig` needs ", " between parameter types.
+function Safe.static(type_name, sig, ...)
+    local method = Safe.method(type_name, sig)
     if method == nil then return nil end
     return Safe.try(m_static, method, ...)
+end
+
+-- via.GameObject's get_Valid, looked up the first time Safe.valid needs it: the method, false when the game has none.
+local get_valid = nil
+local function m_valid(method, go) return method:call(go) end
+
+-- Whether a GameObject kept from an earlier frame is still there, asked before anything else is read on it (the game
+-- logs an "Internal game exception" for a method called on one it destroyed; get_Valid is how other DD2 mods ask):
+-- false when get_Valid gives false; true when it gives anything else, and when the game has no get_Valid (the caller
+-- reads the object as it would without asking); nil when the call raises or `go` is nil. One call a GameObject.
+function Safe.valid(go)
+    if go == nil then return nil end
+    if get_valid == nil then get_valid = Safe.method("via.GameObject", "get_Valid") or false end
+    if not get_valid then return true end
+    local ok, v = pcall(m_valid, get_valid, go)
+    if not ok then return nil end
+    return v ~= false
 end
 
 local function c_len(c) return #c end

@@ -673,6 +673,110 @@ test("gone counts the screens kept that were dropped because their GameObject ra
     eq(HS.gone(), 1, "counted since the mod was loaded, through forget and reset")
 end)
 
+-- via.GameObject's get_Valid as the game has it (game/safe.lua looks it up once): the GameObject's go.valid, true
+-- when not set ("raise": the call raises).
+local function declare_valid()
+    R.method("via.GameObject", "get_Valid", function(go)
+        if go.valid == "raise" then error("Invoke threw an exception") end
+        if go.valid == nil then return true end
+        return go.valid
+    end)
+end
+
+-- The calls of `sig` made on `obj`.
+local function calls_on(obj, sig)
+    local n = 0
+    for _, c in ipairs(R.calls_of(sig)) do
+        if c.this == obj then n = n + 1 end
+    end
+    return n
+end
+
+test("get_Valid true: a kept screen read as before, its GameObject asked it before get_DrawSelf", function()
+    local HS, Hook = fresh()
+    declare_valid()
+    local s = item_screen("ui060301_00", { item = 3502 })
+    eq(HS.current(0).id, 3502, "found")
+    eq(HS.current(0.016).id, 3502, "read again")
+    eq(calls_on(s.go, "get_Valid"), 2, "asked once a read (the kept screen, not the look)")
+    local order = {}
+    for _, c in ipairs(R.calls) do
+        if c.this == s.go and (c.sig == "get_Valid" or c.sig == "get_DrawSelf") then order[#order + 1] = c.sig end
+    end
+    -- the look's own get_DrawSelf on the GameObject it finds first, then each read of the kept one
+    eq(table.concat(order, " "), "get_DrawSelf get_Valid get_DrawSelf get_Valid get_DrawSelf", "get_Valid first")
+    s.o.drawn = false
+    eq(HS.current(0.032), nil, "not drawn")
+    eq(HS.kept(), 1, "still kept")
+    eq(HS.invalid(), 0, "nothing dropped"); eq(HS.gone(), 0, "nothing gone")
+    eq(Hook.info().errors, 0, "no error")
+end)
+
+test("a kept screen whose get_Valid gives false (a menu closed) is dropped quietly, its get_DrawSelf not called",
+    function()
+    local HS, Hook = fresh()
+    declare_valid()
+    local items = item_screen("ui060301_00", { item = 3502 })
+    local equip = item_screen("ui060401_00", { item = 3518, drawn = false })
+    eq(HS.current(0).id, 3502, "the item screen")
+    eq(HS.kept(), 2, "both kept")
+    -- the item screen closed: the game destroyed its GUI, and it left the scene
+    items.o.drawn = false
+    items.go.valid = false
+    table.remove(G.guis, 1)
+    local draws, from = calls_on(items.go, "get_DrawSelf"), #R.calls
+    eq(HS.current(0.016), nil, "nothing drawn")
+    eq(calls_on(items.go, "get_DrawSelf"), draws, "its get_DrawSelf not called")
+    local others = 0
+    for i = from + 1, #R.calls do
+        local c = R.calls[i]
+        if c.this == items.gui or c.this == items.comp or c.this == items.view then others = others + 1 end
+    end
+    eq(others, 0, "nor anything else of it")
+    eq(HS.kept(), 1, "dropped; the equipment screen still kept")
+    eq(HS.invalid(), 1, "counted as no longer valid"); eq(HS.gone(), 0, "not as gone")
+    eq(Hook.info().errors, 0, "no error")
+    eq(calls_on(items.go, "get_Valid"), 2, "asked in the read before and in this one")
+    -- the other screen drawn: read as before
+    equip.o.drawn = true
+    eq(HS.current(0.032).id, 3518, "the equipment screen")
+    for i = 1, 10 do HS.current(0.032 + i * 0.1) end
+    eq(HS.invalid(), 1, "once")
+    eq(calls_on(items.go, "get_Valid"), 2, "the screen dropped is never asked again")
+    HS.forget()
+    HS.reset()
+    eq(HS.invalid(), 1, "counted since the mod was loaded, through forget and reset")
+end)
+
+test("a kept screen whose get_Valid raises is dropped like a raise (gone), its get_DrawSelf not called", function()
+    local HS, Hook = fresh()
+    declare_valid()
+    local s = item_screen("ui060301_00", { item = 3502 })
+    eq(HS.current(0).id, 3502, "found")
+    s.go.valid = "raise"
+    table.remove(G.guis, 1)
+    local draws = calls_on(s.go, "get_DrawSelf")
+    eq(HS.current(0.1), nil, "gone")
+    eq(calls_on(s.go, "get_DrawSelf"), draws, "its get_DrawSelf not called")
+    eq(s.o.asked, nil, "the destroyed GameObject's get_DrawSelf never asked")
+    eq(HS.gone(), 1, "counted as gone"); eq(HS.invalid(), 0, "not as no longer valid")
+    eq(HS.kept(), 0, "not kept")
+    eq(Hook.info().errors, 0, "no error")
+end)
+
+test("without get_Valid in the game: get_DrawSelf alone, as before", function()
+    local HS, Hook = fresh()
+    local s = item_screen("ui060301_00", { item = 3502 })
+    eq(HS.current(0).id, 3502, "found")
+    eq(HS.current(0.016).id, 3502, "read again")
+    eq(#R.calls_of("get_Valid"), 0, "no get_Valid asked")
+    eq(calls_on(s.go, "get_DrawSelf"), 3, "the look's and each read's get_DrawSelf")
+    s.o.destroyed = true
+    eq(HS.current(0.1), nil, "the last guard")
+    eq(HS.gone(), 1, "counted as gone"); eq(HS.invalid(), 0, "not as no longer valid")
+    eq(Hook.info().errors, 0, "no error")
+end)
+
 -- the equipment-change screen ---------------------------------------------------------------------------------------
 
 test("the equipment screen: the hovered ring, and whose by DispCharaId", function()

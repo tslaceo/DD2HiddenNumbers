@@ -73,4 +73,75 @@ test("enum: a number, or the value__ of a boxed enum, as an integer", function()
     eq(Safe.enum(poisoned), nil, "an object that raises")
 end)
 
+test("method: the type's method by its signature or bare name, nil when the type or the method is missing", function()
+    R.new()
+    local m = R.method("app.X", "getA(System.Int32, System.Single)", function() end)
+    R.method("app.X", "get_B", function() end)
+    eq(Safe.method("app.X", "getA(System.Int32, System.Single)"), m, "by its signature")
+    eq(Safe.method("app.X", "get_B") ~= nil, true, "by its bare name")
+    eq(Safe.method("app.X", "get_C"), nil, "no such method")
+    eq(Safe.method("app.Missing", "get_B"), nil, "no such type")
+    R.method("app.Static", "make(System.Int32)", function(n) return n * 2 end, { static = true })
+    eq(Safe.static("app.Static", "make(System.Int32)", 21), 42, "static still calls it")
+end)
+
+-- A fresh Safe (its get_Valid looked up anew) in a fresh game; sdk.find_type_definition counts the look-ups of
+-- via.GameObject in `lookups`.
+local function fresh_safe()
+    package.loaded["DD2DamageMeter/game/safe"] = nil
+    R.new()
+    local S = require("DD2DamageMeter/game/safe")
+    local find = sdk.find_type_definition
+    local counter = { n = 0 }
+    sdk.find_type_definition = function(name)
+        if name == "via.GameObject" then counter.n = counter.n + 1 end
+        return find(name)
+    end
+    return S, counter
+end
+
+-- via.GameObject's get_Valid as the game has it: the GameObject's go.valid ("raise", or a poisoned GameObject: the
+-- call raises).
+local function declare_valid()
+    R.method("via.GameObject", "get_Valid", function(go)
+        if go.valid == "raise" or go.poison then error("Invoke threw an exception") end
+        return go.valid
+    end)
+end
+
+test("valid: get_Valid's answer, looked up once; false only for false; nil when the call raises", function()
+    local S, lookups = fresh_safe()
+    declare_valid()
+    local go = R.object("via.GameObject")
+    go.valid = true
+    eq(S.valid(go), true, "valid")
+    go.valid = false
+    eq(S.valid(go), false, "no longer valid")
+    go.valid = nil
+    eq(S.valid(go), true, "nil from the game is not false: read as before")
+    go.valid = 1
+    eq(S.valid(go), true, "nor is anything else")
+    go.valid = "raise"
+    eq(S.valid(go), nil, "the call raises: nil")
+    go.valid = true
+    go.poison = true
+    eq(S.valid(go), nil, "the object raises: nil")
+    eq(S.valid(nil), nil, "no GameObject: nil")
+    eq(#R.calls_of("get_Valid"), 6, "one call a GameObject asked (none for nil)")
+    eq(lookups.n, 1, "the method looked up once")
+end)
+
+test("valid: without get_Valid in the game, true for every GameObject, without a call, looked up once", function()
+    local S, lookups = fresh_safe()
+    local go = R.object("via.GameObject", {}, { get_DrawSelf = function() return true end })
+    for _ = 1, 5 do eq(S.valid(go), true, "read as before") end
+    eq(#R.calls, 0, "no game call")
+    eq(lookups.n, 1, "looked up once, not again each time")
+    -- no via.GameObject type at all: the same
+    S, lookups = fresh_safe()
+    eq(S.valid({}), true, "no type")
+    eq(S.valid({}), true, "still")
+    eq(lookups.n, 1, "looked up once")
+end)
+
 T.finish()

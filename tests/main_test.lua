@@ -7454,6 +7454,56 @@ test("with debug on, debug.log tells by frame the world's changes, each scene-ty
     eq(M.info().errors, 0, "no error caught")
 end)
 
+test("with debug on, debug.log tells a screen or bar kept that get_Valid dropped apart from one that raised",
+        function()
+    world({ settings = { debug = true } })
+    bars_scene()
+    -- via.GameObject's get_Valid as the game has it: go.valid, true when not set ("raise": the call raises)
+    R.method("via.GameObject", "get_Valid", function(go)
+        if go.valid == "raise" then error("Invoke threw an exception") end
+        return go.valid ~= false
+    end)
+    local M = load()
+    local goblin = gauge(W.goblin)
+    local other = gauge(char("ch220003_00_16", { hostile = true, hp = 500, max_hp = 1000 }), { x = 300 })
+    local screen = item_gui()
+    local function log() return R.files[LOG_FILE] or "" end
+    local function draws(go)
+        local n = 0
+        for _, c in ipairs(R.calls_of("get_DrawSelf")) do if c.this == go then n = n + 1 end end
+        return n
+    end
+    frame()
+    local HS, gauges = mod("game/hidden_screens"), mod("game/gauges")
+    eq(HS.kept(), 1, "the screen kept"); eq(gauges.count(), 2, "the bars kept")
+    -- a menu closed: the game destroyed the kept screen, and it left the scene
+    screen.go.valid = false
+    table.remove(W.guis)
+    local screen_draws = draws(screen.go)
+    frame()
+    eq(lines_with(log(), "hidden screens: a kept screen no longer valid at frame 2: dropped"), 1, "the screen")
+    eq(draws(screen.go), screen_draws, "its get_DrawSelf not called")
+    frame()
+    eq(lines_with(log(), "hidden screens:"), 1, "once")
+    -- an enemy gone: the game destroyed its bar
+    goblin.go.valid = false
+    table.remove(W.guis, 1)
+    local goblin_draws = draws(goblin.go)
+    frame()
+    eq(lines_with(log(), "game bars: 1 kept no longer valid at frame 4: dropped"), 1, "the bar")
+    eq(draws(goblin.go), goblin_draws, "its get_DrawSelf not called")
+    frame()
+    eq(lines_with(log(), "game bars:"), 1, "once")
+    -- the last guard: a bar whose get_Valid raises
+    other.go.valid = "raise"
+    frame()
+    eq(lines_with(log(), "game bars: 1 kept raised at frame 6 (the game destroyed them): dropped"), 1, "raised")
+    eq(lines_with(log(), "game bars:"), 2, "told apart")
+    eq(lines_with(log(), "kept raised"), 1, "the bar no longer valid not told as raised")
+    eq(lines_with(log(), "kept screen raised"), 0, "nor the screen")
+    eq(M.info().errors, 0, "no error caught")
+end)
+
 test("no hidden-stats evidence is taken without a player character", function()
     world({ settings = { debug = true } })
     pause_manager()

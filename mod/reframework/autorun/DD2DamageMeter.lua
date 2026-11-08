@@ -145,11 +145,12 @@
 -- character (a title screen, a load, a save being quit) the world is going, the objects kept are dropped in the first
 -- such frame, and while it lasts neither screens nor bars are read (nor the debug evidence taken); with him back they
 -- are looked for again, and the evidence waits a second. Each scene-type change drops them too, whatever the player.
--- A kept screen the game destroyed before either told is still caught by its own read (the last guard: its
--- get_DrawSelf raises and it is dropped). The party's HP poll and skill states read the characters of that frame's
--- listing, never ones kept from an earlier one (game/actors.lua, game/heals.lua); a party read without a player reads
--- no pawn. With `debug` on, debug.log tells each of these by frame (world_frame, on_scene_change, note_gone), so
--- that an exit to the title shows which came first.
+-- A kept screen or bar the game destroyed before either told (a menu closed, an enemy gone) is still caught by its
+-- own read: its GameObject's get_Valid gives false and it is dropped before its get_DrawSelf is called, or, the last
+-- guard, its get_Valid or get_DrawSelf raises and it is dropped. The party's HP poll and skill states read the
+-- characters of that frame's listing, never ones kept from an earlier one (game/actors.lua, game/heals.lua); a party
+-- read without a player reads no pawn. With `debug` on, debug.log tells each of these by frame (world_frame,
+-- on_scene_change, note_gone, note_bars_gone), so that an exit to the title shows which came first.
 --
 -- Reload-safe: the state lives in the global DD2DM (DD2DM.state) and survives a
 -- reload of this file; every method is hooked once per Lua state (game/hook.lua), the frame and menu callbacks are
@@ -357,8 +358,12 @@ end
 S.hidden_cost = hidden_cost()
 -- With `debug` on, the screens whose fallen-back anchor debug.log has told in this game session (tell_anchor).
 S.anchor_told = S.anchor_told or {}
--- HiddenScreens.gone() as debug.log last told it (note_gone).
+-- HiddenScreens.gone() and .invalid() as debug.log last told them (note_gone).
 S.hidden_gone = S.hidden_gone or HiddenScreens.gone()
+S.hidden_invalid = S.hidden_invalid or HiddenScreens.invalid()
+-- gauges.gone() and .invalid() as debug.log last told them (note_bars_gone).
+S.bars_gone = S.bars_gone or gauges.gone()
+S.bars_invalid = S.bars_invalid or gauges.invalid()
 -- With `debug` on, the debug collector's meets and the hidden-stats evidence's snapshots, and their time, since they
 -- were last logged (log_collect_cost).
 local function collect_cost()
@@ -961,15 +966,38 @@ local function world_frame(t)
     end
 end
 
--- A hidden-stats screen kept that the game destroyed under the mod (its get_DrawSelf raised: the last guard,
--- HiddenScreens.gone) is one debug.log line, with the frame: "hidden screens: a kept screen raised at frame N (the
--- game destroyed it): dropped".
+-- A hidden-stats screen kept that the game destroyed under the mod is one debug.log line, with the frame, told apart
+-- by how it was caught: its get_Valid gave false (HiddenScreens.invalid): "hidden screens: a kept screen no longer
+-- valid at frame N: dropped"; its get_Valid or get_DrawSelf raised (the last guard, HiddenScreens.gone): "hidden
+-- screens: a kept screen raised at frame N (the game destroyed it): dropped". Two numbers compared a frame.
 local function note_gone()
+    local invalid = HiddenScreens.invalid()
+    if invalid ~= S.hidden_invalid then
+        S.hidden_invalid = invalid
+        log_line(string.format("hidden screens: a kept screen no longer valid at frame %d: dropped", S.frame))
+    end
     local n = HiddenScreens.gone()
     if n == S.hidden_gone then return end
     S.hidden_gone = n
     log_line(string.format("hidden screens: a kept screen raised at frame %d (the game destroyed it): dropped",
         S.frame))
+end
+
+-- The game's bars kept (over heads, the boss's, the player's HUD) that the game destroyed under the mod, told the same
+-- way, with how many in that frame: "game bars: N kept no longer valid at frame F: dropped" (gauges.invalid) and
+-- "game bars: N kept raised at frame F (the game destroyed them): dropped" (gauges.gone). Two numbers compared a frame.
+local function note_bars_gone()
+    local invalid, n = gauges.invalid(), gauges.gone()
+    if invalid ~= S.bars_invalid then
+        log_line(string.format("game bars: %d kept no longer valid at frame %d: dropped", invalid - S.bars_invalid,
+            S.frame))
+        S.bars_invalid = invalid
+    end
+    if n ~= S.bars_gone then
+        log_line(string.format("game bars: %d kept raised at frame %d (the game destroyed them): dropped",
+            n - S.bars_gone, S.frame))
+        S.bars_gone = n
+    end
 end
 
 local function method_found(type_name, name)
@@ -1851,6 +1879,7 @@ local function window_frame(t)
             local bars = (over or plate) and read_gauge("enemy bars", gauges.shown, t) or nil
             local boss = (at_boss or plate or buildup) and read_gauge("boss bar", gauges.boss, t) or nil
             local hud = v.player_numbers and read_gauge("player bars", gauges.player, t) or nil
+            note_bars_gone()
             if over and bars then guard("enemy bars", enemy_bars_frame, bars) end
             if at_boss and boss then guard("boss bar", boss_bar_frame, boss) end
             -- the HP those numbers read, to the open fight and the meter's enemy line (built below)

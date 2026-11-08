@@ -9,6 +9,8 @@
   number last showed.
 - Hidden stats: the rings that only work without pawns no longer give a pawn the status-screen hint when that pawn's
   stats can't be read.
+- Fewer "Internal game exception ... get_DrawSelf" lines in REFramework's log: the mod now checks whether a closed
+  menu or a vanished health bar is still there before it reads it.
 
 ## 1.0.0
 
