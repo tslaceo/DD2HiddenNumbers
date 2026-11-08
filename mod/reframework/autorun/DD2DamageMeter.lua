@@ -168,7 +168,7 @@
 --                   hidden_stats_missing: the imgui and draw calls the journal, the settings window, the enemy HP
 --                   numbers, the damage numbers, the enemy plate, the buildup bars, the player's numbers, the
 --                   hidden-stats panel found missing)
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 
 local Fight = require("DD2DamageMeter/fight")
 local Clock = require("DD2DamageMeter/clock")
@@ -2073,7 +2073,7 @@ if log then
     if #S.missing > 0 then
         pcall(log.warn, "[DD2DamageMeter] game methods not found: " .. table.concat(S.missing, ", "))
     end
-    -- "[DD2DamageMeter] Hidden Numbers 1.0.0 loaded (load 1), hooks: 11, missing: 0": the README tells a player who
+    -- "[DD2DamageMeter] Hidden Numbers 1.0.1 loaded (load 1), hooks: 11, missing: 0": the README tells a player who
     -- reports a bug to look for "Hidden Numbers" in REFramework's log; the tag is the files' name, as in the line above
     pcall(log.info, string.format("[DD2DamageMeter] %s %s loaded (load %d), hooks: %d, missing: %d", Menu.TITLE,
         VERSION, S.loads, S.hooks_n, #S.missing))

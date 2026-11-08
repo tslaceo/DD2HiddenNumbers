@@ -39,4 +39,4 @@ body:
     id: versions
     attributes:
       label: Mod and game version
-      placeholder: "1.0.0, 4.2.0.0"
+      placeholder: "1.0.1, 4.2.0.0"

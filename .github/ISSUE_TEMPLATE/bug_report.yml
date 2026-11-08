@@ -18,7 +18,7 @@ body:
     attributes:
       label: Mod version
       description: The number in the archive's name, or in REFramework's log line "Hidden Numbers ... loaded".
-      placeholder: "1.0.0"
+      placeholder: "1.0.1"
   - type: input
     id: game_version
     attributes:

@@ -348,7 +348,7 @@ test("loads with no game types and reports them missing", function()
     world({ game = false })
     local M = load()
     local info = M.info()
-    eq(info.version, "1.0.0", "version")
+    eq(info.version, "1.0.1", "version")
     eq(info.hooks, 0, "nothing hooked")
     eq(#R.hooks, 0, "no sdk.hook call")
     eq(#info.missing, #HOOKED + 1 + #CALLED, "every hooked method, the battle mode and the called ones are missing")
@@ -3372,16 +3372,16 @@ test("a fight kept inside a hit is written to history.json on the next frame, on
     eq(M.info().errors, 0, "no error caught")
 end)
 
-test("info reports 1.0.0, 11 hooks and the journal", function()
+test("info reports 1.0.1, 11 hooks and the journal", function()
     world()
     local M = load()
     local info = M.info()
-    eq(info.version, "1.0.0", "version")
-    eq(M.version, "1.0.0", "DD2DM.version")
+    eq(info.version, "1.0.1", "version")
+    eq(M.version, "1.0.1", "DD2DM.version")
     -- the line the README's "Report a bug" asks for: the name players see and the version, tagged with the files' name
     local named = 0
     for _, line in ipairs(R.logs) do
-        if line:find("[DD2DamageMeter] Hidden Numbers 1.0.0 loaded (load ", 1, true) then named = named + 1 end
+        if line:find("[DD2DamageMeter] Hidden Numbers 1.0.1 loaded (load ", 1, true) then named = named + 1 end
     end
     eq(named, 1, "REFramework's log names the mod and its version, once")
     eq(info.hooks, 11, "hooks")
