@@ -513,6 +513,9 @@ test("a curve that is not flat steps ending in 0 has no steps; its top stays", f
     -- the edge between two points, to a hundredth: a step that ends at 7.5 is not 7 or 8
     eq(steps(read(function(x) return x < 7.25 and 30.0 or (x < 12.75 and 15.0 or 0.0) end)), "30<7.25 15<12.75",
         "edges between the points of the scan")
+    -- an edge off the hundredths is shown rounded, not dropped for the top line
+    eq(steps(read(function(x) return x < 22 / 3 and 30.0 or (x < 12.754 and 15.0 or 0.0) end)), "30<7.33 15<12.75",
+        "edges off the hundredths, rounded")
     eq(read(function() return nil end), nil, "a curve that answers nothing: no curve")
 end)
 
